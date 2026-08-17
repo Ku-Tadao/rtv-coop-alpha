@@ -1,0 +1,16 @@
+dist/
+*.vmz
+
+__pycache__/
+*.pyc
+.venv/
+
+# Logs collected while debugging a session
+*.log
+hostlogs/
+clientlogs/
+
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

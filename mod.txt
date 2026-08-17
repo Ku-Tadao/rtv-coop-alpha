@@ -1,0 +1,60 @@
+[mod]
+name="RTV Coop Alpha"
+id="rtv-coop-alpha"
+version="1.0.0"
+priority=10
+
+[updates]
+modworkshop=56011
+
+[autoload]
+RTVCoopAlpha="res://mods/RTVCoopAlpha/Main.gd"
+
+[registry]
+
+[hooks]
+"res://Scripts/AI.gd"="_physics_process, Death, Initialize, PlayFire, PlayTail, PlayIdle, PlayCombat, PlayDamage, PlayDeath"
+"res://Scripts/AISpawner.gd"="_ready, _physics_process, Initialize, SpawnWanderer, SpawnGuard, SpawnHider, SpawnMinion, SpawnBoss"
+"res://Scripts/Bed.gd"="Interact, UpdateTooltip"
+"res://Scripts/BTR.gd"="_ready, _physics_process, Muzzle"
+"res://Scripts/CASA.gd"="_ready, _physics_process, Collided"
+"res://Scripts/CatFeeder.gd"="TryFeeding"
+"res://Scripts/CatRescue.gd"="Interact"
+"res://Scripts/Character.gd"="_physics_process, Death"
+"res://Scripts/Compiler.gd"="Spawn"
+"res://Scripts/Door.gd"="_ready, Interact"
+"res://Scripts/EventSystem.gd"="_ready, FighterJet, Airdrop, Helicopter, Police, BTR, CrashSite, Cat, Transmission"
+"res://Scripts/Fire.gd"="_ready, Interact"
+"res://Scripts/Helicopter.gd"="_ready, _physics_process, FireRockets, Spotted, Sensor"
+"res://Scripts/Hitbox.gd"="ApplyDamage"
+"res://Scripts/Instrument.gd"="_physics_process, _exit_tree"
+"res://Scripts/Interactor.gd"="_physics_process, Interact"
+"res://Scripts/Interface.gd"="Complete, Close, Drop, ContextPlace"
+"res://Scripts/Loader.gd"="LoadScene, SaveCharacter, SaveWorld, SaveShelter, SaveTrader"
+"res://Scripts/Mine.gd"="Detonate, InstantDetonate"
+"res://Scripts/Layouts.gd"="_ready"
+"res://Scripts/LootContainer.gd"="_ready, Interact"
+"res://Scripts/LootSimulation.gd"="_ready"
+"res://Scripts/MissileSpawner.gd"="ExecuteLaunchMissiles"
+"res://Scripts/Pickup.gd"="Interact"
+"res://Scripts/Placer.gd"="_physics_process, _input, ContextPlace"
+"res://Scripts/Police.gd"="_ready, _physics_process"
+"res://Scripts/Radio.gd"="Interact"
+"res://Scripts/RocketGrad.gd"="ExecuteLaunch, _process"
+"res://Scripts/RocketHelicopter.gd"="_ready, _physics_process"
+"res://Scripts/Simulation.gd"="_process"
+"res://Scripts/Switch.gd"="Interact"
+"res://Scripts/Television.gd"="Interact"
+"res://Scripts/Trader.gd"="_ready, CompleteTask"
+"res://Scripts/Transition.gd"="Interact"
+"res://Scripts/UIManager.gd"="OpenContainer"
+
+[script_extend]
+"res://Scripts/Door.gd"="res://mods/RTVCoopAlpha/Game/ScriptExtends/Door_Extend.gd"
+"res://Scripts/Switch.gd"="res://mods/RTVCoopAlpha/Game/ScriptExtends/Switch_Extend.gd"
+"res://Scripts/Radio.gd"="res://mods/RTVCoopAlpha/Game/ScriptExtends/Radio_Extend.gd"
+"res://Scripts/Television.gd"="res://mods/RTVCoopAlpha/Game/ScriptExtends/Television_Extend.gd"
+"res://Scripts/Mine.gd"="res://mods/RTVCoopAlpha/Game/ScriptExtends/Mine_Extend.gd"
+"res://Scripts/Explosion.gd"="res://mods/RTVCoopAlpha/Game/ScriptExtends/Explosion_Extend.gd"
+"res://Scripts/Spawner.gd"="res://mods/RTVCoopAlpha/Game/ScriptExtends/Spawner_Extend.gd"
+"res://Scripts/Layouts.gd"="res://mods/RTVCoopAlpha/Game/ScriptExtends/Layouts_Extend.gd"
