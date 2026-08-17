@@ -119,8 +119,9 @@ These are reproduced and understood, and are what the `dev` branch is for.
 
 - **Host crashes.** Hard native process termination with no Godot error and no
   stack — the log just stops mid-line. Present in the `improved-v1..v4` builds,
-  not in the released `1.0.0`. Currently being bisected across three files; see
-  [docs/BUILDING.md](docs/BUILDING.md#bisecting-a-crash).
+  not in the released `1.0.0`. Currently being bisected across three files —
+  see [docs/CRASH-BISECT.md](docs/CRASH-BISECT.md) for the evidence, the
+  suspects, and the arms to run.
 - **Wrong container opens.** Shelter furniture and scene loot containers draw
   ids from two independent counters into the same key, and clients guess
   unmatched ids by proximity — so opening a Locker can open a Nightstand. Fixed
