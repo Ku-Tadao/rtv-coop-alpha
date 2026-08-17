@@ -1,0 +1,13 @@
+# The build zips these files verbatim into the .vmz, so line endings are part of
+# the artifact. Pin them to LF everywhere or a Windows checkout silently produces
+# a different archive than Linux/CI.
+* text=auto eol=lf
+
+*.gd    text eol=lf
+*.tscn  text eol=lf
+*.txt   text eol=lf
+*.py    text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
+
+*.vmz   binary
