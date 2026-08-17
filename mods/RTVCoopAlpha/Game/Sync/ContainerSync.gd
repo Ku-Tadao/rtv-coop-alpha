@@ -26,20 +26,11 @@ func _node_id(node: Node) -> int:
 	return 0
 
 
-func _find_container_near(pos: Vector3, radius: float) -> Node:
-	var best: Node = null
-	var best_dist: float = radius
-	for c in get_tree().get_nodes_in_group("CoopLootContainer"):
-		if not is_instance_valid(c) or not (c is LootContainer):
-			continue
-		var d: float = c.global_position.distance_to(pos)
-		if d < best_dist:
-			best_dist = d
-			best = c
-	return best
-
-
 func _find_container_by_id(cid: int) -> Node:
+	# _node_id() reports 0 for a node that was never assigned an id; matching on that would
+	# hand back an arbitrary unregistered container. Fail closed instead.
+	if cid <= 0:
+		return null
 	for container in get_tree().get_nodes_in_group("CoopLootContainer"):
 		if not is_instance_valid(container):
 			continue
@@ -108,14 +99,9 @@ func BroadcastContainerStorage(cid: int, serialized: Array) -> void:
 @rpc("authority", "reliable", "call_remote")
 func BroadcastContainerFullState(cid: int, pos: Vector3, loot_arr: Array, storage_arr: Array, storaged_flag: bool) -> void:
 	_log("BroadcastContainerFullState RECEIVED cid=%d pos=%s loot=%d storage=%d" % [cid, str(pos), loot_arr.size(), storage_arr.size()])
+	# No position-based fallback: guessing the node by proximity assigns an id the host never
+	# gave it, which then shadows the node that legitimately owns that id.
 	var container := _find_container_by_id(cid)
-	if container == null and pos != Vector3.ZERO:
-		container = _find_container_near(pos, 1.0)
-		if container and not container.has_meta("coop_container_id"):
-			container.set_meta("coop_container_id", cid)
-			_log("  → matched by position, assigned cid=%d to %s" % [cid, str(container)])
-		elif container and container.has_meta("coop_container_id"):
-			container = null
 	if container == null:
 		_log("  → container NOT FOUND for cid=%d" % cid)
 		return

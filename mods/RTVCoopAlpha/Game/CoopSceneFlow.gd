@@ -121,7 +121,7 @@ func ScanIfNeeded(_delta: float) -> void:
 	_players.world_ai.clear()
 	_players.ai_targets.clear()
 	_players.nextUuid = 0
-	_players.nextFurnitureId = 0
+	_players.nextFurnitureId = 1
 	_players.nextContainerId = 1
 	pendingSecondLootSync = -1.0
 	_players.scene_ready = false
@@ -215,11 +215,23 @@ func RegisterSceneContainers() -> void:
 		if root == null or seen.has(root):
 			continue
 		seen[root] = true
+		# Shelter furniture is identified by its furniture id in _broadcast_shelter_furniture.
+		# Stamping it here too would put two different ids on one node, and collide with a
+		# scene container that happens to draw the same number.
+		if _is_shelter_furniture(root):
+			continue
 		if not root.is_in_group("CoopLootContainer"):
 			root.add_to_group("CoopLootContainer")
 		if CoopAuthority.is_host() and not root.has_meta("coop_container_id"):
 			root.set_meta("coop_container_id", _players.nextContainerId)
 			_players.nextContainerId += 1
+
+
+func _is_shelter_furniture(root: Node) -> bool:
+	for child in root.get_children():
+		if child is Furniture:
+			return true
+	return false
 
 
 func ApplyClientSpawn(pos: Vector3) -> void:

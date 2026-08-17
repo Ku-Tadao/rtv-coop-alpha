@@ -24,7 +24,8 @@ var ai_targets: Dictionary = {}
 var next_ai_uuid: int = 0
 var worldItems: Dictionary = {}
 var worldFurniture: Dictionary = {}
-var nextFurnitureId: int = 0
+# fid 0 is the "no furniture" sentinel (see CoopSceneFlow._broadcast_shelter_furniture), so ids start at 1
+var nextFurnitureId: int = 1
 var nextUuid: int = 0
 var nextContainerId: int = 1
 var coop_session_seed: int = 0
@@ -356,7 +357,7 @@ func _on_disconnected() -> void:
 	worldItems.clear()
 	worldFurniture.clear()
 	next_ai_uuid = 0
-	nextFurnitureId = 0
+	nextFurnitureId = 1
 	nextUuid = 0
 	nextContainerId = 1
 	scene_ready = false
