@@ -1,5 +1,12 @@
 extends Node
 
+## The peer this proxy speaks for. Set by Coop.ensure_player_proxy; a proxy with
+## peer_id 0 was built by something that did not know, and accepts nothing.
+##
+## Note these nodes never call set_multiplayer_authority, so their authority is
+## the default -- peer 1, the host. That is what makes @rpc("authority") below
+## mean host-only. Setting authority to the owning peer would silently invert it.
+var peer_id: int = 0
 
 var sync_position: Vector3 = Vector3.ZERO
 var sync_rotation: Vector3 = Vector3.ZERO
@@ -112,6 +119,10 @@ func _submit_to_host(payload: PackedFloat32Array, anim_cond: String = "",
 		weapon_type: String = "", weapon_file: String = "", attachments: String = "", backpack_file: String = "") -> void:
 	if not multiplayer.is_server():
 		return
+	# One proxy per peer, so a peer may only write to its own. Without this any
+	# client could submit state on another player's behalf.
+	if peer_id == 0 or multiplayer.get_remote_sender_id() != peer_id:
+		return
 	if not _unpack(payload):
 		return
 	sync_anim_condition = anim_cond
@@ -122,7 +133,9 @@ func _submit_to_host(payload: PackedFloat32Array, anim_cond: String = "",
 	_apply_broadcast.rpc(payload, anim_cond, weapon_type, weapon_file, attachments, backpack_file)
 
 
-@rpc("any_peer", "unreliable", "call_remote")
+# Host -> everyone. This was "any_peer" with no sender check at all, so any
+# client could drive any other player's puppet.
+@rpc("authority", "unreliable", "call_remote")
 func _apply_broadcast(payload: PackedFloat32Array, anim_cond: String = "",
 		weapon_type: String = "", weapon_file: String = "", attachments: String = "", backpack_file: String = "") -> void:
 	if not _unpack(payload):

@@ -81,9 +81,13 @@ func ensure_player_proxy(peer_id: int) -> Node:
 	var proxy_name := "State_%d" % peer_id
 	var existing := player_states.get_node_or_null(proxy_name)
 	if existing:
+		# Callers include _reconcile_player_proxies, whose ids come back over an
+		# RPC. A proxy that never learned its owner rejects everything it is sent.
+		existing.peer_id = peer_id
 		return existing
 	var proxy: Node = _PlayerStateProxy.new()
 	proxy.name = proxy_name
+	proxy.peer_id = peer_id
 	player_states.add_child(proxy)
 	return proxy
 

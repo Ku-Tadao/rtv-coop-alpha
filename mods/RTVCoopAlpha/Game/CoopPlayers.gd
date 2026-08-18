@@ -404,7 +404,9 @@ func _reconcile_player_proxies() -> void:
 	if coop == null:
 		return
 	for peer_id in peer_names:
-		coop.ensure_player_proxy(peer_id)
+		# Keys survive an RPC round trip as Variants; ensure_player_proxy takes an
+		# int, and a float would land in a differently-named node.
+		coop.ensure_player_proxy(int(peer_id))
 
 
 func _emit_peer_joined(peer_id: int, display_name: String) -> void:
