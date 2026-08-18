@@ -81,11 +81,25 @@ func _rebuild_cid_cache() -> void:
 			node = node.get_parent()
 
 
+## Every container the host has numbered, locked ones included. Sent once per
+## scene, ahead of the per-container contents, so a guest can address anything it
+## is later allowed to open.
+@rpc("authority", "reliable", "call_remote")
+func BroadcastContainerIds(entries: Array) -> void:
+	var adopted: int = 0
+	for entry in entries:
+		if _adopt_container_id(str(entry.get("path", "")), int(entry.get("cid", 0))) != null:
+			adopted += 1
+	_log("BroadcastContainerIds: adopted %d/%d" % [adopted, entries.size()])
+
+
 ## Claim an id for the node the host named. Paths are identical across peers for
 ## anything the scene itself loaded, which is the same assumption door sync has
 ## always relied on -- and unlike a position match it is exact, so it cannot
 ## silently attach an id to the wrong container.
 func _adopt_container_id(node_path: String, cid: int) -> Node:
+	if cid <= 0 or node_path == "":
+		return null
 	var node: Node = get_node_or_null(node_path)
 	if node == null or not (node is LootContainer):
 		_log("  → path did not resolve to a LootContainer: %s" % node_path)

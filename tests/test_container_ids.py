@@ -102,6 +102,38 @@ class TestGuestsLearnSceneContainerIds(unittest.TestCase):
         self.assertIn("str(root.get_path())", body)
         self.assertIn("node_path", body)
 
+    def test_locked_containers_are_still_numbered(self):
+        # The contents broadcast skips them, so before the id manifest a locked
+        # container never got an id on the guest -- and unlocking it later left
+        # it permanently unopenable for them.
+        body = func(read("Game/CoopSceneFlow.gd"), "_broadcast_container_storage_to")
+        manifest = body[: body.index("if root.locked:")]
+        self.assertIn("BroadcastContainerIds", manifest)
+        self.assertNotIn("root.locked", manifest, "numbering must not skip locked")
+
+    def test_locked_container_contents_are_not_sent(self):
+        # They are generated from the per-visit seed, so both peers already
+        # agree, and nothing can have changed in a container nobody can open.
+        body = func(read("Game/CoopSceneFlow.gd"), "_broadcast_container_storage_to")
+        state = body[body.index("if root.locked:"):]
+        self.assertIn("continue", state)
+        self.assertIn("BroadcastContainerFullState", state)
+
+    def test_the_manifest_is_sent_before_the_contents(self):
+        body = func(read("Game/CoopSceneFlow.gd"), "_broadcast_container_storage_to")
+        self.assertLess(
+            body.index("BroadcastContainerIds"),
+            body.index("BroadcastContainerFullState"),
+        )
+
+    def test_the_manifest_adopts_through_the_same_exact_path(self):
+        body = func(read("Game/Sync/ContainerSync.gd"), "BroadcastContainerIds")
+        self.assertIn("_adopt_container_id(", body)
+
+    def test_an_unnumbered_entry_is_refused(self):
+        body = func(read("Game/Sync/ContainerSync.gd"), "_adopt_container_id")
+        self.assertIn("cid <= 0", body)
+
     def test_the_guest_adopts_the_id_from_the_path(self):
         body = func(read("Game/Sync/ContainerSync.gd"), "BroadcastContainerFullState")
         self.assertIn("_adopt_container_id(node_path, cid)", body)

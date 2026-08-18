@@ -599,6 +599,26 @@ func _broadcast_container_storage_to(peer_id: int) -> void:
 		return
 	var containers := get_tree().get_nodes_in_group("CoopLootContainer")
 	print("[SceneFlow] Host: broadcasting %d containers to peer %d" % [containers.size(), peer_id])
+
+	# Number everything first, locked included. Only the host numbers scene
+	# containers, so an id that never reaches the guest is a container the guest
+	# can never address -- and a locked one becomes addressable the moment someone
+	# unlocks it. Contents are deliberately not sent for locked containers: they
+	# are generated from the per-visit seed and so already match on both peers,
+	# and nothing can have changed in a container nobody can open.
+	var ids: Array = []
+	for root in containers:
+		if not is_instance_valid(root) or not (root is LootContainer):
+			continue
+		var id: int = cs._node_id(root)
+		if id > 0:
+			ids.append({"cid": id, "path": str(root.get_path())})
+	if not ids.is_empty():
+		if peer_id == 0:
+			cs.BroadcastContainerIds.rpc(ids)
+		else:
+			cs.BroadcastContainerIds.rpc_id(peer_id, ids)
+
 	for root in containers:
 		if not is_instance_valid(root) or not (root is LootContainer):
 			continue
