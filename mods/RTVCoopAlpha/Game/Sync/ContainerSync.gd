@@ -5,6 +5,14 @@ extends "res://mods/RTVCoopAlpha/Game/Sync/BaseSync.gd"
 
 var _container_holders: Dictionary = {}
 
+# Resolving a container id used to scan the CoopLootContainer group and then walk
+# every Interactable up its parent chain. The host sends one container RPC per
+# container on scene load, so each client paid that scan once per container:
+# a few hundred containers against a few thousand interactables is hundreds of
+# thousands of node visits while the guest is already sitting on a loading screen.
+var _cid_cache: Dictionary = {}
+var _cid_cache_frame: int = -1
+
 
 func _sync_key() -> String:
 	return "container"
@@ -31,24 +39,53 @@ func _find_container_by_id(cid: int) -> Node:
 	# hand back an arbitrary unregistered container. Fail closed instead.
 	if cid <= 0:
 		return null
+	var hit = _cid_cache.get(cid)
+	if is_instance_valid(hit) and hit.is_inside_tree():
+		return hit
+	# Ids are stamped from five call sites, so rather than invalidate at each of
+	# them, rebuild on a miss -- capped at one scan per frame. The load-time burst
+	# of container RPCs arrives within a frame or two, so they share one scan
+	# instead of paying for one each. A genuinely unknown id costs nothing extra:
+	# the cache was already rebuilt this frame, so we know it is not there.
+	var frame: int = Engine.get_process_frames()
+	if frame == _cid_cache_frame:
+		return null
+	_cid_cache_frame = frame
+	_rebuild_cid_cache()
+	hit = _cid_cache.get(cid)
+	return hit if is_instance_valid(hit) else null
+
+
+func _rebuild_cid_cache() -> void:
+	_cid_cache.clear()
 	for container in get_tree().get_nodes_in_group("CoopLootContainer"):
 		if not is_instance_valid(container):
 			continue
-		if _node_id(container) == cid:
-			return container
+		var id: int = _node_id(container)
+		if id > 0:
+			_cid_cache[id] = container
 	for collider in get_tree().get_nodes_in_group("Interactable"):
 		if not is_instance_valid(collider):
 			continue
 		var node: Node = collider
 		while node:
 			if node is LootContainer:
-				if _node_id(node) == cid:
+				var id: int = _node_id(node)
+				if id > 0 and not _cid_cache.has(id):
+					# Membership is what decides whether a container syncs at all,
+					# so adopt it here the way the old scan did.
 					if not node.is_in_group("CoopLootContainer"):
 						node.add_to_group("CoopLootContainer")
-					return node
+					_cid_cache[id] = node
 				break
 			node = node.get_parent()
-	return null
+
+
+## Called on map change: every cached node belongs to the scene being torn down.
+func reset_scene_state() -> void:
+	_container_holders.clear()
+	_cid_cache.clear()
+	_cid_cache_frame = -1
 
 
 func SyncContainerStorage(container: Node) -> void:

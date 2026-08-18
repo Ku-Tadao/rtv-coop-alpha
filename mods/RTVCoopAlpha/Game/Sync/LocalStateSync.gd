@@ -13,6 +13,13 @@ var _local_shot_count: int = 0
 var _was_firing_local: bool = false
 var _prev_shot_accum: Dictionary = {}
 
+# Resolved once per scene rather than five string-path lookups per broadcast.
+# They only change when the map does, and this runs at 20Hz forever.
+var _cached_scene: Node = null
+var _rig_manager: Node = null
+var _interface: Node = null
+var _camera: Node = null
+
 
 func _ready() -> void:
 	var coop := RTVCoop.get_instance()
@@ -140,8 +147,8 @@ func GatherLocalAnimState(controller: Node3D) -> Dictionary:
 		state["animCondition"] = "Group"
 		state["animBlend"] = 1.0
 
-	var scene: Node = get_tree().current_scene
-	var rig_manager: Node = scene.get_node_or_null("Core/Camera/Manager") if scene else null
+	_refresh_scene_nodes()
+	var rig_manager: Node = _rig_manager
 	var weapon_slot = null
 
 	if rig_manager:
@@ -171,7 +178,7 @@ func GatherLocalAnimState(controller: Node3D) -> Dictionary:
 	state["flashlight"] = gameData.flashlight
 	state["nvg"] = gameData.NVG
 
-	var iface: Node = scene.get_node_or_null("Core/UI/Interface") if scene else null
+	var iface: Node = _interface
 	if iface:
 		var bp_slot: Node = iface.get_node_or_null("Equipment/Backpack")
 		var bp_cc: int = bp_slot.get_child_count() if bp_slot else -1
@@ -200,7 +207,19 @@ func GatherLocalAnimState(controller: Node3D) -> Dictionary:
 			is_suppressed = true
 	state["suppressed"] = is_suppressed
 
-	var camera: Node = scene.get_node_or_null("Core/Camera") if scene else null
-	state["pitch"] = camera.rotation.x if camera else 0.0
+	state["pitch"] = _camera.rotation.x if is_instance_valid(_camera) else 0.0
 
 	return state
+
+
+## Re-resolve only when the scene changes or a cached node has gone away.
+func _refresh_scene_nodes() -> void:
+	var scene: Node = get_tree().current_scene
+	var cached_ok: bool = is_instance_valid(_rig_manager) and is_instance_valid(_interface) \
+			and is_instance_valid(_camera)
+	if scene == _cached_scene and cached_ok:
+		return
+	_cached_scene = scene
+	_rig_manager = scene.get_node_or_null("Core/Camera/Manager") if scene else null
+	_interface = scene.get_node_or_null("Core/UI/Interface") if scene else null
+	_camera = scene.get_node_or_null("Core/Camera") if scene else null

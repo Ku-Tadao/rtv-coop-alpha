@@ -2,11 +2,24 @@ extends Node
 
 
 const LOG_PATH := "user://coop_debug.log"
+const LOG_PREV_PATH := "user://coop_debug.log.1"
+# The log appends across every session forever. Roll it once it gets big enough
+# to be slow to open, keeping exactly one previous file -- the crash we chase
+# needs the session before last at most, not every session ever played.
+const LOG_ROLL_BYTES := 8 * 1024 * 1024
+
+## Per-agent equipment dumps are ~6 lines per AI, and every line is flushed, so
+## a spawn wave becomes a burst of synchronous writes. The lines the crash work
+## actually reads -- heartbeat, weapon swaps, deaths, container ids -- are not
+## behind this.
+var verbose: bool = false
+
 var _file: FileAccess = null
 var _peer_label: String = "UNKNOWN"
 
 
 func _ready() -> void:
+	_roll_if_large()
 	if FileAccess.file_exists(LOG_PATH):
 		_file = FileAccess.open(LOG_PATH, FileAccess.READ_WRITE)
 		if _file:
@@ -26,6 +39,30 @@ func _ready() -> void:
 		print("[CoopLogger] Appending to: %s" % ProjectSettings.globalize_path(LOG_PATH))
 	else:
 		push_error("[CoopLogger] Failed to open log file at %s" % LOG_PATH)
+
+
+func _roll_if_large() -> void:
+	if not FileAccess.file_exists(LOG_PATH):
+		return
+	var probe := FileAccess.open(LOG_PATH, FileAccess.READ)
+	if probe == null:
+		return
+	var size: int = probe.get_length()
+	probe = null
+	if size < LOG_ROLL_BYTES:
+		return
+	var dir := DirAccess.open("user://")
+	if dir == null:
+		return
+	if dir.file_exists(LOG_PREV_PATH.get_file()):
+		dir.remove(LOG_PREV_PATH.get_file())
+	dir.rename(LOG_PATH.get_file(), LOG_PREV_PATH.get_file())
+
+
+## Detail that is useful when reproducing a specific problem and noise otherwise.
+func log_verbose(tag: String, msg: String) -> void:
+	if verbose:
+		log_msg(tag, msg)
 
 
 func set_peer_label(label: String) -> void:

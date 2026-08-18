@@ -35,6 +35,19 @@ func _log(msg: String) -> void:
 	if l: l.log_msg("AISync", msg)
 
 
+## Per-agent spawn detail. Every log line is flushed to disk, so a spawn wave
+## used to be a burst of synchronous writes; this is off unless someone is
+## reproducing a spawn problem.
+func _log_verbose(msg: String) -> void:
+	var l = Engine.get_meta("CoopLogger", null)
+	if l and l.has_method("log_verbose"): l.log_verbose("AISync", msg)
+
+
+func _verbose() -> bool:
+	var l = Engine.get_meta("CoopLogger", null)
+	return l != null and l.get("verbose") == true
+
+
 func _get_ai_loot_container(ai: Node) -> Node:
 	if ai.container == null:
 		return null
@@ -338,7 +351,7 @@ func _reap_stale_world_ai() -> void:
 func _deferred_activate(agent: Node, spawn_type: String, is_sync: bool) -> void:
 	if not is_instance_valid(agent) or not agent.is_inside_tree():
 		return
-	_log("_deferred_activate type=%s is_sync=%s is_server=%s" % [spawn_type, str(is_sync), str(multiplayer.is_server())])
+	_log_verbose("_deferred_activate type=%s is_sync=%s is_server=%s" % [spawn_type, str(is_sync), str(multiplayer.is_server())])
 	if is_sync or not multiplayer.is_server():
 		_full_equipment_from_variant(agent)
 		agent.Activate()
@@ -356,14 +369,15 @@ func _deferred_activate(agent: Node, spawn_type: String, is_sync: bool) -> void:
 
 func _full_equipment_from_variant(agent: Node) -> void:
 	var variant: Dictionary = agent.get_meta("coop_spawn_variant", {})
-	var w_count: int = agent.weapons.get_child_count() if agent.weapons else 0
-	var has_clothing: bool = agent.get("allowClothing") == true
-	var cloth_count: int = agent.clothing.size() if agent.get("clothing") != null else -1
-	var has_mesh: bool = agent.mesh != null
-	var container_type: String = str(type_string(typeof(agent.container))) if agent.container else "null"
-	var container_is_lc: bool = agent.container is LootContainer if agent.container else false
-	_log("_full_equipment_from_variant weapons=%d allowClothing=%s clothingArr=%d mesh=%s container=%s isLC=%s" % [w_count, str(has_clothing), cloth_count, str(has_mesh), container_type, str(container_is_lc)])
-	_log("  variant=%s" % str(variant))
+	if _verbose():
+		var w_count: int = agent.weapons.get_child_count() if agent.weapons else 0
+		var has_clothing: bool = agent.get("allowClothing") == true
+		var cloth_count: int = agent.clothing.size() if agent.get("clothing") != null else -1
+		var has_mesh: bool = agent.mesh != null
+		var container_type: String = str(type_string(typeof(agent.container))) if agent.container else "null"
+		var container_is_lc: bool = agent.container is LootContainer if agent.container else false
+		_log_verbose("_full_equipment_from_variant weapons=%d allowClothing=%s clothingArr=%d mesh=%s container=%s isLC=%s" % [w_count, str(has_clothing), cloth_count, str(has_mesh), container_type, str(container_is_lc)])
+		_log_verbose("  variant=%s" % str(variant))
 
 	if agent.weapons and agent.weapons.get_child_count() > 0:
 		var weapon_file: String = variant.get("weaponFile", "")
@@ -376,7 +390,7 @@ func _full_equipment_from_variant(agent: Node) -> void:
 					break
 		if weapon_index < 0:
 			weapon_index = randi_range(0, agent.weapons.get_child_count() - 1)
-		_log("  → weapon selected: index=%d/%d file=%s" % [weapon_index, agent.weapons.get_child_count(), weapon_file])
+		_log_verbose("  → weapon selected: index=%d/%d file=%s" % [weapon_index, agent.weapons.get_child_count(), weapon_file])
 		agent.weapon = agent.weapons.get_child(weapon_index)
 		if agent.weapon:
 			agent.weaponData = agent.weapon.slotData.itemData
@@ -439,7 +453,7 @@ func _full_equipment_from_variant(agent: Node) -> void:
 				child.queue_free()
 
 	var allow_clothing: bool = agent.get("allowClothing") if agent.get("allowClothing") != null else false
-	_log("  clothing: allowClothing=%s clothing_count=%d mesh=%s" % [str(allow_clothing), agent.clothing.size() if agent.get("clothing") else 0, str(agent.mesh != null)])
+	_log_verbose("  clothing: allowClothing=%s clothing_count=%d mesh=%s" % [str(allow_clothing), agent.clothing.size() if agent.get("clothing") else 0, str(agent.mesh != null)])
 	if allow_clothing and agent.clothing and agent.clothing.size() > 0:
 		var clothing_path: String = variant.get("clothingPath", "")
 		var cloth_index: int = -1
@@ -450,7 +464,7 @@ func _full_equipment_from_variant(agent: Node) -> void:
 					break
 		if cloth_index < 0:
 			cloth_index = randi_range(0, agent.clothing.size() - 1)
-		_log("  → applying clothing index=%d/%d path=%s" % [cloth_index, agent.clothing.size(), clothing_path])
+		_log_verbose("  → applying clothing index=%d/%d path=%s" % [cloth_index, agent.clothing.size(), clothing_path])
 		if agent.mesh:
 			agent.mesh.set_surface_override_material(0, agent.clothing[cloth_index])
 
@@ -680,7 +694,7 @@ func _apply_client_animator_for_state(ai: Node, state: int) -> void:
 
 @rpc("authority", "reliable", "call_remote")
 func BroadcastAISpawn(uuid: int, spawn_type: String, spawn_pos: Vector3, spawn_rot: Vector3, variant: Dictionary) -> void:
-	_log("BroadcastAISpawn RECEIVED uuid=%d type=%s variant_keys=%s" % [uuid, spawn_type, str(variant.keys())])
+	_log_verbose("BroadcastAISpawn RECEIVED uuid=%d type=%s variant_keys=%s" % [uuid, spawn_type, str(variant.keys())])
 	var players := _players()
 	if players.world_ai.has(uuid):
 		return

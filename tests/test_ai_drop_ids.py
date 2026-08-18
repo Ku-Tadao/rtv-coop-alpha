@@ -12,20 +12,12 @@ agrees: two host paths mint (either can fire first) and one client path adopts.
 """
 
 import re
+import sys
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-MOD = ROOT / "mods" / "RTVCoopAlpha"
-
-
-def read(rel: str) -> str:
-    return (MOD / rel).read_text(encoding="utf-8")
-
-
-def func(src: str, name: str) -> str:
-    body = src[src.index(f"func {name}("):]
-    return body[: body.index("\nfunc ", 1)]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gdsource import MOD, func, read  # noqa: E402
 
 
 def gd_sources():

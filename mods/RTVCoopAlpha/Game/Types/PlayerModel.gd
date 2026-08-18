@@ -409,7 +409,7 @@ func _process(delta: float) -> void:
         _spine_bone = aiInstance.spineData.bone if aiInstance.spineData else 12
     _spine_pitch = lerp(_spine_pitch, _spine_target, clampf(10.0 * delta, 0.0, 1.0))
     var bonePose: Transform3D = skel.get_bone_global_pose_no_override(_spine_bone)
-    bonePose.basis = bonePose.basis.rotated(bonePose.basis.x, -_spine_pitch * spine_share)
+    bonePose.basis = bonePose.basis.rotated(bonePose.basis.x, -_spine_pitch * SPINE_SHARE)
     skel.set_bone_global_pose_override(_spine_bone, bonePose, 1.0, true)
 
 
@@ -494,48 +494,21 @@ func _apply_puppet_backpack(file: String):
 # looking down folds the character at the waist and the arms follow. The share
 # below controls how much of it the spine takes; the rest should eventually go
 # to the neck/head. F6 lowers the share, F7 raises it, F8 reports.
-static var spine_pitch_min: float = -1.60
+# Tuned in-game with a temporary F6/F7 slider, then settled. The slider is gone:
+# it was bound to global keys on every puppet, so any player could press F6 and
+# silently change how everyone else stood, with no way back short of a restart.
+# The bone-name dump it printed is now answered offline and exactly by
+# tools/rig-inspect -- see docs/BUILDING.md.
+#
+# SPINE_PITCH_MIN is deliberately below the deepest value the camera can produce
+# (-pi/2), so it does not clamp; the share is what shapes the lean.
+const SPINE_PITCH_MIN := -1.60
 const SPINE_PITCH_MAX := 1.2
-static var spine_share: float = 0.7
-const SPINE_TUNE_STEP := 0.05
-
-static var _deepest_raw: float = 0.0
-
-var _pitch_clamp_logged: bool = false
+const SPINE_SHARE := 0.7
 
 
 func _apply_puppet_spine_pitch(pitch: float):
-    _deepest_raw = minf(_deepest_raw, pitch)
-    _spine_target = clampf(pitch, spine_pitch_min, SPINE_PITCH_MAX)
-
-
-func _input(event: InputEvent) -> void:
-    if not (event is InputEventKey and event.pressed and not event.echo):
-        return
-    match event.physical_keycode:
-        KEY_F6:
-            spine_share = maxf(0.0, spine_share - SPINE_TUNE_STEP)
-        KEY_F7:
-            spine_share = minf(1.5, spine_share + SPINE_TUNE_STEP)
-        KEY_F8:
-            _coop_log("SPINE TUNE: share=%.2f min=%.2f deepest_raw=%.3f bones=%s" % [
-                spine_share, spine_pitch_min, _deepest_raw, _coop_bone_names()])
-            return
-        _:
-            return
-    _coop_log("SPINE TUNE: share=%.2f" % spine_share)
-
-
-# Logged on demand so the neck/head bone can be identified by name -- splitting
-# the pitch across two bones is what actually fixes looking down.
-func _coop_bone_names() -> String:
-    if aiInstance == null or aiInstance.skeleton == null:
-        return "<no skeleton>"
-    var skel: Skeleton3D = aiInstance.skeleton
-    var names: Array = []
-    for i in skel.get_bone_count():
-        names.append("%d:%s" % [i, skel.get_bone_name(i)])
-    return ", ".join(names)
+    _spine_target = clampf(pitch, SPINE_PITCH_MIN, SPINE_PITCH_MAX)
 
 
 var _puppet_spotlight: SpotLight3D = null

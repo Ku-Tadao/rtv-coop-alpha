@@ -141,8 +141,8 @@ func ScanIfNeeded(_delta: float) -> void:
 	if event_sync and "_sleep_in_progress" in event_sync:
 		event_sync._sleep_in_progress = false
 	var container_sync: Node = coop.get_sync("container") if coop else null
-	if container_sync and "_container_holders" in container_sync:
-		container_sync._container_holders.clear()
+	if container_sync and container_sync.has_method("reset_scene_state"):
+		container_sync.reset_scene_state()
 
 	lastKnownMap = current_map
 	if current_map == null:

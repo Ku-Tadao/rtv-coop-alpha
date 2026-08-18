@@ -131,6 +131,13 @@ loopback keys that are always live, in any scene, regardless of transport:
 | **F9** | Host over ENet on `127.0.0.1:27015` |
 | **F10** | Join `127.0.0.1:27015` |
 | **F11** | Disconnect |
+| **F8** | Toggle verbose logging |
+
+Verbose logging adds per-agent spawn detail. It is off by default because every
+log line is flushed to disk — that flush is what makes `coop_debug.log` survive
+the hard crash, and it also means a spawn wave becomes a burst of synchronous
+writes. The lines the crash work reads (heartbeat, weapon swaps, AI deaths,
+container ids) are always on. The log rolls to `coop_debug.log.1` past 8 MB.
 
 `HostGameEnet()` and `JoinGame()` are unconditionally ENet, so these work even
 with GodotSteam loaded — nothing needs to be removed or rebuilt. Note the co-op

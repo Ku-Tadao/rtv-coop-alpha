@@ -8,14 +8,12 @@ world and a save would write the wrong data.
 """
 
 import re
+import sys
 import unittest
 from pathlib import Path
 
-MOD = Path(__file__).resolve().parents[1] / "mods" / "RTVCoopAlpha"
-
-
-def read(rel: str) -> str:
-    return (MOD / rel).read_text(encoding="utf-8")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gdsource import func, read  # noqa: E402
 
 
 class TestSaveGuard(unittest.TestCase):

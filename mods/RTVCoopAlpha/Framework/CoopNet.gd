@@ -287,3 +287,10 @@ func _input(event: InputEvent) -> void:
 		elif event.physical_keycode == KEY_F11:
 			print("[CoopNet] F11 — Disconnect")
 			Disconnect()
+		elif event.physical_keycode == KEY_F8:
+			# Per-agent spawn detail is off by default: every log line is flushed
+			# to disk, so a spawn wave is a burst of synchronous writes.
+			var l = Engine.get_meta("CoopLogger", null)
+			if l and "verbose" in l:
+				l.verbose = not l.verbose
+				l.log_msg("CoopNet", "F8 — verbose logging %s" % ("ON" if l.verbose else "OFF"))

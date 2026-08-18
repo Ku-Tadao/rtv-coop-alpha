@@ -10,19 +10,12 @@ as an RPC and was never called by anything. An unused notification path looks
 identical to a working one in a diff.
 """
 
+import sys
 import unittest
 from pathlib import Path
 
-MOD = Path(__file__).resolve().parents[1] / "mods" / "RTVCoopAlpha"
-
-
-def read(rel: str) -> str:
-    return (MOD / rel).read_text(encoding="utf-8")
-
-
-def func(src: str, name: str) -> str:
-    body = src[src.index(f"func {name}("):]
-    return body[: body.index("\nfunc ", 1)]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gdsource import func, read  # noqa: E402
 
 
 class TestGuestsAreToldEarly(unittest.TestCase):
