@@ -1,0 +1,7 @@
+; Minimal project so Godot will run inspect.gd headlessly. Mounts nothing on its
+; own -- the pack is loaded at runtime by the script.
+config_version=5
+
+[application]
+config/name="RTV Rig Inspect"
+config/features=PackedStringArray("4.6")
