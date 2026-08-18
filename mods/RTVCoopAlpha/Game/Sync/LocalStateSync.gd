@@ -4,6 +4,7 @@ extends "res://mods/RTVCoopAlpha/Game/Sync/BaseSync.gd"
 
 
 const BROADCAST_RATE := 20.0
+const MAX_SHOTS_PER_UPDATE := 8
 
 
 var gameData: Resource = preload("res://Resources/GameData.tres")
@@ -12,6 +13,24 @@ var _local_shot_count: int = 0
 var _was_firing_local: bool = false
 var _prev_shot_accum: Dictionary = {}
 var _bp_logged: bool = false
+
+
+func _ready() -> void:
+	var coop := RTVCoop.get_instance()
+	if coop and coop.events:
+		coop.events.puppet_spawned.connect(_on_puppet_spawned)
+		coop.events.puppet_despawned.connect(_on_puppet_despawned)
+
+
+func _on_puppet_spawned(peer_id: int, _puppet: Node) -> void:
+	var coop := RTVCoop.get_instance()
+	var proxy: Node = coop.get_player_proxy(peer_id) if coop else null
+	# ponytail: pre-spawn shots have no remote model to play from, so baseline them here.
+	_prev_shot_accum[peer_id] = proxy.shot_accumulator if proxy else 0
+
+
+func _on_puppet_despawned(peer_id: int) -> void:
+	_prev_shot_accum.erase(peer_id)
 
 
 func _sync_key() -> String:
@@ -73,10 +92,13 @@ func _read_remote_proxies() -> void:
 		if proxy == null:
 			continue
 		var state: Dictionary = proxy.read_state()
-		var shot_delta: int = proxy.shot_accumulator - _prev_shot_accum.get(peer_id, 0)
-		_prev_shot_accum[peer_id] = proxy.shot_accumulator
+		var current_shots: int = proxy.shot_accumulator
+		var previous_shots: int = _prev_shot_accum.get(peer_id, current_shots)
+		var shot_delta: int = current_shots - previous_shots
+		_prev_shot_accum[peer_id] = current_shots
 		if shot_delta > 0:
-			state["shots"] = shot_delta
+			# ponytail: cap catch-up playback; use timestamped shot events if 8 shots/50ms becomes real.
+			state["shots"] = mini(shot_delta, MAX_SHOTS_PER_UPDATE)
 		if puppet.has_method("SetTarget"):
 			puppet.SetTarget(state.get("pos", puppet.global_position), state.get("rot", puppet.global_rotation))
 		if puppet.has_method("ApplyAnimState"):
@@ -103,15 +125,15 @@ func GatherLocalAnimState(controller: Node3D) -> Dictionary:
 	elif gameData.isAiming:
 		state["animCondition"] = "Defend"
 		state["animBlend"] = 0.0
+	elif gameData.isMoving and gameData.isRunning:
+		state["animCondition"] = "Movement"
+		state["animBlend"] = 5.0
 	elif gameData.isMoving and gameData.weaponPosition == 1:
 		state["animCondition"] = "MovementLow"
-		state["animBlend"] = 2.0 if gameData.isRunning else 1.0
+		state["animBlend"] = 1.0
 	elif gameData.isMoving:
 		state["animCondition"] = "Movement"
-		if gameData.isRunning:
-			state["animBlend"] = 5.0
-		else:
-			state["animBlend"] = 1.0
+		state["animBlend"] = 1.0
 	elif gameData.weaponPosition == 2:
 		state["animCondition"] = "Defend"
 		state["animBlend"] = 0.0

@@ -92,6 +92,7 @@ func CaptureInitialWeaponFile():
     await get_tree().physics_frame
     if aiInstance && aiInstance.weapon && aiInstance.weapon.slotData && aiInstance.weapon.slotData.itemData:
         currentWeaponFile = aiInstance.weapon.slotData.itemData.file
+        currentWeaponNode = aiInstance.weapon
 
 
 func _isolate_puppet_resources(ai: Node) -> void:
@@ -183,8 +184,8 @@ func ApplyAnimState(state: Dictionary):
 
     var weaponFile: String = state.get("weaponFile", "")
     if weaponFile != currentWeaponFile:
-        SwapWeapon(weaponFile)
-        currentWeaponFile = weaponFile
+        if SwapWeapon(weaponFile):
+            currentWeaponFile = weaponFile
 
     if aiInstance.weapons:
         for child in aiInstance.weapons.get_children():
@@ -245,12 +246,34 @@ func OnPuppetRespawn():
         animPlayer.play("Rifle_Idle", 0.3)
 
 
+func _coop_log(msg: String) -> void:
+    var l = Engine.get_meta("CoopLogger", null)
+    if l: l.log_msg("PlayerModel", msg)
+
+
+var _shots_played: int = 0
+
+
 func PlayPuppetFireEffect(suppressed: bool = false, fireMode: int = 1):
-    if !currentWeaponNode:
+    if not is_instance_valid(currentWeaponNode):
         return
     var muzzleNode = currentWeaponNode.get_node_or_null("Muzzle")
     if !muzzleNode:
         return
+
+    # This path never ran in 1.0.0 and is the leading crash suspect: it adds two
+    # nodes to a muzzle that SwapWeapon never cleans, because SwapWeapon only
+    # frees children of aiInstance.weapons -- a different node. If that is the
+    # bug, muzzle_children climbs without bound. Sampled, not per shot, so the
+    # log stays readable during sustained fire.
+    _shots_played += 1
+    if _shots_played % 25 == 0:
+        _coop_log("fire shots=%d muzzle_children=%d weapon=%s on_ai_weapon=%s" % [
+            _shots_played,
+            muzzleNode.get_child_count(),
+            currentWeaponFile,
+            str(aiInstance != null and currentWeaponNode == aiInstance.weapon),
+        ])
     if !suppressed:
         var flash = flashVFX.instantiate()
         muzzleNode.add_child(flash)
@@ -272,26 +295,32 @@ func PlayPuppetFireEffect(suppressed: bool = false, fireMode: int = 1):
             audio.PlayInstance(weaponData.fireSemi, 20, 200)
 
 
-func SwapWeapon(file: String):
+func SwapWeapon(file: String) -> bool:
     if !aiInstance || !aiInstance.weapons:
-        return
+        return false
+
+    var weapon = null
+    if file != "":
+        var scene = Database.get(file)
+        if !scene:
+            return false
+        weapon = scene.instantiate()
+        if weapon == null:
+            return false
 
     if _active_fire_audio and is_instance_valid(_active_fire_audio):
         _active_fire_audio.stop()
         _active_fire_audio.queue_free()
         _active_fire_audio = null
 
+    var freed: int = aiInstance.weapons.get_child_count()
     for child in aiInstance.weapons.get_children():
         child.queue_free()
+    currentWeaponNode = null
+    _coop_log("swap to='%s' freed=%d" % [file, freed])
 
-    if file == "":
-        return
-
-    var scene = Database.get(file)
-    if !scene:
-        return
-
-    var weapon = scene.instantiate()
+    if weapon == null:
+        return true
     aiInstance.weapons.add_child(weapon)
     currentWeaponNode = weapon
 
@@ -316,6 +345,7 @@ func SwapWeapon(file: String):
                     var magazine = attachments.get_node_or_null(weaponData.compatible[0].file)
                     if magazine:
                         magazine.show()
+    return true
 
 
 var _current_attachments: Array = []
@@ -343,7 +373,7 @@ func _process(delta: float) -> void:
 
 
 func _apply_puppet_attachments(attachmentFiles: Array):
-    if !currentWeaponNode or attachmentFiles == _current_attachments:
+    if not is_instance_valid(currentWeaponNode) or attachmentFiles == _current_attachments:
         return
     _current_attachments = attachmentFiles.duplicate()
 

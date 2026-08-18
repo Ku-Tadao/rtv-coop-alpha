@@ -126,6 +126,12 @@ func _replace_ai_death(direction, force) -> void:
 		if not lc.is_in_group("CoopLootContainer"):
 			lc.add_to_group("CoopLootContainer")
 		lc.set_meta("coop_container_id", _corpse_cid)
+	# One of the two observed crashes came right after interacting with a dead AI.
+	# Payload size matters here: this goes out over the transport in one call.
+	var _l = Engine.get_meta("CoopLogger", null)
+	if _l: _l.log_msg("AIHooks", "death uuid=%d loot=%d weapon=%d backpack=%d secondary=%d cid=%d" % [
+		uuid, container_loot.size(), weapon_dict.size(), backpack_dict.size(),
+		secondary_dict.size(), _corpse_cid])
 	ai.BroadcastAIDeath.rpc(uuid, direction, force, container_loot, weapon_dict, backpack_dict, secondary_dict, _corpse_cid)
 	if players:
 		if a.weapon:

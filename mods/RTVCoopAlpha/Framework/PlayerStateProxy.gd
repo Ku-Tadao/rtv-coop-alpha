@@ -90,9 +90,9 @@ func _pack() -> PackedFloat32Array:
 	return p
 
 
-func _unpack(p: PackedFloat32Array) -> void:
+func _unpack(p: PackedFloat32Array) -> bool:
 	if p.size() < 14:
-		return
+		return false
 	sync_position = Vector3(p[0], p[1], p[2])
 	sync_rotation = Vector3(p[3], p[4], p[5])
 	sync_anim_blend = p[6]
@@ -102,7 +102,8 @@ func _unpack(p: PackedFloat32Array) -> void:
 	sync_flashlight = p[10] > 0.5
 	sync_suppressed = p[11] > 0.5
 	sync_pitch = p[12]
-	shot_accumulator = int(p[13])
+	shot_accumulator = maxi(shot_accumulator, int(p[13]))
+	return true
 
 
 @rpc("any_peer", "unreliable", "call_remote")
@@ -110,7 +111,8 @@ func _submit_to_host(payload: PackedFloat32Array, anim_cond: String = "",
 		weapon_type: String = "", weapon_file: String = "", attachments: String = "", backpack_file: String = "") -> void:
 	if not multiplayer.is_server():
 		return
-	_unpack(payload)
+	if not _unpack(payload):
+		return
 	sync_anim_condition = anim_cond
 	sync_weapon_type = weapon_type
 	sync_weapon_file = weapon_file
@@ -122,13 +124,18 @@ func _submit_to_host(payload: PackedFloat32Array, anim_cond: String = "",
 @rpc("any_peer", "unreliable", "call_remote")
 func _apply_broadcast(payload: PackedFloat32Array, anim_cond: String = "",
 		weapon_type: String = "", weapon_file: String = "", attachments: String = "", backpack_file: String = "") -> void:
-	_unpack(payload)
+	if not _unpack(payload):
+		return
 	if anim_cond != "":
 		sync_anim_condition = anim_cond
 	if weapon_type != "":
 		sync_weapon_type = weapon_type
-	if weapon_file != "":
-		sync_weapon_file = weapon_file
-	if attachments != "":
-		sync_attachments = attachments
+	# Assigned unconditionally, so an empty field in an unreliable packet flips the
+	# remote weapon off and back on. Logged on transition only -- if this churns,
+	# it churns visibly here without burying the log at 20Hz.
+	if weapon_file != sync_weapon_file:
+		var l = Engine.get_meta("CoopLogger", null)
+		if l: l.log_msg("PlayerStateProxy", "weapon '%s' -> '%s'" % [sync_weapon_file, weapon_file])
+	sync_weapon_file = weapon_file
+	sync_attachments = attachments
 	sync_backpack_file = backpack_file
