@@ -1,7 +1,23 @@
-; Minimal project so Godot will run inspect.gd headlessly. Mounts nothing on its
-; own -- the pack is loaded at runtime by the script.
+; Minimal project so Godot will run the inspection scripts headlessly. Mounts
+; nothing on its own -- the packs are loaded at runtime by the script.
+
 config_version=5
 
 [application]
+
 config/name="RTV Rig Inspect"
 config/features=PackedStringArray("4.6")
+
+[debug]
+
+; parsecheck.gd asks "would the game accept this script", so this project must
+; not be stricter than the game is. inference_on_variant defaults to error here
+; and clearly is not error there: `var s := n.get_script()` ships in the
+; pristine 1.0.0 release and works. Demoted to a warning so only real parse
+; failures fail the check.
+gdscript/warnings/inference_on_variant=1
+gdscript/warnings/native_method_override=1
+gdscript/warnings/unsafe_property_access=0
+gdscript/warnings/unsafe_method_access=0
+gdscript/warnings/unsafe_cast=0
+gdscript/warnings/unsafe_call_argument=0

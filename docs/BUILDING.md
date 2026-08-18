@@ -74,6 +74,39 @@ func RequestAISync(uuids: PackedInt32Array = PackedInt32Array()) -> void:
 Opting out is one line in the place that knows the intent. The default stays
 strict.
 
+## The parse check
+
+`tools/build.py` reads the sources as text and `tools/lint_rpc.py` reads them as
+patterns. Neither knows what GDScript *is*. Godot rejects an entire script on a
+parse error and says nothing at the point of use — that is how "remote players
+are invisible but still collide" shipped once, from a single tab in a
+space-indented file.
+
+```bash
+python tools/parsecheck.py
+```
+
+It mounts the game's `RTV.pck` and the built `.vmz` in headless Godot and parses
+every mod script the way the engine will. It catches things nothing else here
+can — the tab, a syntax error, **and a call with the wrong number of arguments**.
+
+It needs Godot 4.6.x on PATH and the game installed, so it is a **pre-release
+gate on a machine that has the game**, not a push gate; CI cannot run it. It
+also runs as part of the test suite, skipping itself when either is missing.
+
+Scripts that touch the game's autoloads (`Loader`, `Database`, `Simulation`, …)
+report `Identifier not declared`, because those are registered from project
+settings this tool project does not have. Those are filtered by name; an
+unknown identifier in the same shape is still reported, so a typo does not slip
+through.
+
+One trap worth knowing: the tool project must not be *stricter* than the game.
+`inference_on_variant` defaults to an error in a bare Godot project and is
+plainly not an error in the game — `var s := n.get_script()` ships in the
+pristine 1.0.0 release and works. `tools/rig-inspect/project.godot` demotes it.
+If a new warning starts failing the check, ask whether the game really rejects
+it before changing the mod.
+
 ## CI
 
 `.github/workflows/build.yml` runs on every push to `main`/`dev`, on pull
