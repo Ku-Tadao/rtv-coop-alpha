@@ -132,26 +132,11 @@ func _replace_ai_death(direction, force) -> void:
 	if _l: _l.log_msg("AIHooks", "death uuid=%d loot=%d weapon=%d backpack=%d secondary=%d cid=%d" % [
 		uuid, container_loot.size(), weapon_dict.size(), backpack_dict.size(),
 		secondary_dict.size(), _corpse_cid])
-	ai.BroadcastAIDeath.rpc(uuid, direction, force, container_loot, weapon_dict, backpack_dict, secondary_dict, _corpse_cid)
+	# Number the drops before broadcasting -- the ids travel in the same call, so
+	# the client adopts them instead of deriving them. See AISync.NumberAIDrops.
+	var drop_ids := ai.NumberAIDrops(players, a) if ai else PackedInt32Array()
+	ai.BroadcastAIDeath.rpc(uuid, direction, force, container_loot, weapon_dict, backpack_dict, secondary_dict, _corpse_cid, drop_ids)
 	if players:
-		if a.weapon:
-			var w_uuid: int = uuid * 10 + 1
-			a.weapon.set_meta("network_uuid", w_uuid)
-			players.worldItems[w_uuid] = a.weapon
-			if w_uuid >= players.nextUuid:
-				players.nextUuid = w_uuid + 1
-		if a.backpack:
-			var b_uuid: int = uuid * 10 + 2
-			a.backpack.set_meta("network_uuid", b_uuid)
-			players.worldItems[b_uuid] = a.backpack
-			if b_uuid >= players.nextUuid:
-				players.nextUuid = b_uuid + 1
-		if a.secondary:
-			var s_uuid: int = uuid * 10 + 3
-			a.secondary.set_meta("network_uuid", s_uuid)
-			players.worldItems[s_uuid] = a.secondary
-			if s_uuid >= players.nextUuid:
-				players.nextUuid = s_uuid + 1
 		players.world_ai.erase(uuid)
 		players.ai_targets.erase(uuid)
 

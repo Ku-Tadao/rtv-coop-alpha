@@ -69,6 +69,51 @@ func _live_ai(uuid) -> Node:
 	return ai
 
 
+## Number an AI's droppable equipment for the network, host side.
+##
+## These ids used to be derived as `uuid * 10 + n` so both peers could compute
+## them without transmitting anything. That collided with world items: scene
+## pickups are numbered 0..N from the same counter and scenes register 85-143 of
+## them, so the first AI's weapon claimed an id a scene pickup already owned.
+## Two nodes answering to one id means BroadcastPickupRemove frees whichever one
+## `worldItems` happens to hold, and the other becomes a ghost.
+##
+## Ids now come from the counter's owner and travel in BroadcastAIDeath, the way
+## corpse_cid already does. -1 is "no such drop"; 0 cannot be the sentinel
+## because it is a valid world item id.
+func NumberAIDrops(players: Node, agent: Node) -> PackedInt32Array:
+	var ids := PackedInt32Array([-1, -1, -1])
+	if players == null or not is_instance_valid(agent):
+		return ids
+	var parts: Array = [agent.get("weapon"), agent.get("backpack"), agent.get("secondary")]
+	for i in parts.size():
+		var part = parts[i]
+		if part == null or not is_instance_valid(part):
+			continue
+		var u: int = players.GenerateUuid()
+		ids[i] = u
+		part.set_meta("network_uuid", u)
+		players.worldItems[u] = part
+	return ids
+
+
+## Client side of NumberAIDrops: adopt the ids the host minted rather than
+## deriving them, which is the whole point of sending them.
+func ApplyAIDropIds(players: Node, agent: Node, ids: PackedInt32Array) -> void:
+	if players == null or not is_instance_valid(agent):
+		return
+	var parts: Array = [agent.get("weapon"), agent.get("backpack"), agent.get("secondary")]
+	for i in mini(parts.size(), ids.size()):
+		var u: int = ids[i]
+		var part = parts[i]
+		if u < 0 or part == null or not is_instance_valid(part):
+			continue
+		part.set_meta("network_uuid", u)
+		players.worldItems[u] = part
+		if u >= players.nextUuid:
+			players.nextUuid = u + 1
+
+
 func _prune_pending_uuid(uuid: int) -> void:
 	for i in range(_pending_spawns.size() - 1, -1, -1):
 		if int(_pending_spawns[i].get("uuid", -1)) == uuid:
@@ -116,8 +161,11 @@ func _physics_process(delta: float) -> void:
 			if ai == null:
 				continue
 			var target: Dictionary = players.ai_targets[uuid]
-			ai.global_position = ai.global_position.lerp(target["pos"], AI_LERP_SPEED * delta)
-			ai.global_rotation.y = lerp_angle(ai.global_rotation.y, target["rot"].y, AI_LERP_SPEED * delta)
+			# Unclamped, this overshoots below ~18fps and oscillates -- exactly when
+			# the game is already struggling. PickupSync and WorldSync clamp too.
+			var t: float = clampf(AI_LERP_SPEED * delta, 0.0, 1.0)
+			ai.global_position = ai.global_position.lerp(target["pos"], t)
+			ai.global_rotation.y = lerp_angle(ai.global_rotation.y, target["rot"].y, t)
 
 		for uuid in players.world_ai:
 			var ai: Node = players.world_ai.get(uuid)
@@ -261,25 +309,8 @@ func _watch_ai_deaths() -> void:
 			if not _lc.is_in_group("CoopLootContainer"):
 				_lc.add_to_group("CoopLootContainer")
 			_lc.set_meta("coop_container_id", _corpse_cid)
-		if ai.weapon:
-			var w_uuid: int = int(uuid) * 10 + 1
-			ai.weapon.set_meta("network_uuid", w_uuid)
-			players.worldItems[w_uuid] = ai.weapon
-			if w_uuid >= players.nextUuid:
-				players.nextUuid = w_uuid + 1
-		if ai.backpack:
-			var b_uuid: int = int(uuid) * 10 + 2
-			ai.backpack.set_meta("network_uuid", b_uuid)
-			players.worldItems[b_uuid] = ai.backpack
-			if b_uuid >= players.nextUuid:
-				players.nextUuid = b_uuid + 1
-		if ai.secondary:
-			var s_uuid: int = int(uuid) * 10 + 3
-			ai.secondary.set_meta("network_uuid", s_uuid)
-			players.worldItems[s_uuid] = ai.secondary
-			if s_uuid >= players.nextUuid:
-				players.nextUuid = s_uuid + 1
-		BroadcastAIDeath.rpc(int(uuid), Vector3.ZERO, 20.0, container_loot, weapon_dict, backpack_dict, secondary_dict, _corpse_cid)
+		var drop_ids := NumberAIDrops(players, ai)
+		BroadcastAIDeath.rpc(int(uuid), Vector3.ZERO, 20.0, container_loot, weapon_dict, backpack_dict, secondary_dict, _corpse_cid, drop_ids)
 		stale.append(uuid)
 
 	for uuid in stale:
@@ -658,6 +689,8 @@ func BroadcastAISpawn(uuid: int, spawn_type: String, spawn_pos: Vector3, spawn_r
 		_pending_spawns.append(entry)
 
 
+## Empty means "send me everything you have"; a list means "just these".
+# lint-rpc: optional-args
 @rpc("any_peer", "reliable", "call_remote")
 func RequestAISync(uuids: PackedInt32Array = PackedInt32Array()) -> void:
 	if not multiplayer.is_server():
@@ -704,7 +737,7 @@ func BroadcastAISound(uuid: int, sound_type: int, full_auto: bool = false) -> vo
 
 
 @rpc("authority", "reliable", "call_remote")
-func BroadcastAIDeath(uuid: int, direction: Vector3, force: float, container_loot: Array = [], weapon_dict: Dictionary = {}, backpack_dict: Dictionary = {}, secondary_dict: Dictionary = {}, corpse_cid: int = -1) -> void:
+func BroadcastAIDeath(uuid: int, direction: Vector3, force: float, container_loot: Array = [], weapon_dict: Dictionary = {}, backpack_dict: Dictionary = {}, secondary_dict: Dictionary = {}, corpse_cid: int = -1, drop_ids: PackedInt32Array = PackedInt32Array()) -> void:
 	var players := _players()
 	_prune_pending_uuid(uuid)
 	var ai := _live_ai(uuid)
@@ -734,24 +767,7 @@ func BroadcastAIDeath(uuid: int, direction: Vector3, force: float, container_loo
 		ai.skeleton.simulationTime = 999.0
 	players.world_ai.erase(uuid)
 
-	if ai.weapon:
-		var w_uuid: int = uuid * 10 + 1
-		ai.weapon.set_meta("network_uuid", w_uuid)
-		players.worldItems[w_uuid] = ai.weapon
-		if w_uuid >= players.nextUuid:
-			players.nextUuid = w_uuid + 1
-	if ai.backpack:
-		var b_uuid: int = uuid * 10 + 2
-		ai.backpack.set_meta("network_uuid", b_uuid)
-		players.worldItems[b_uuid] = ai.backpack
-		if b_uuid >= players.nextUuid:
-			players.nextUuid = b_uuid + 1
-	if ai.secondary:
-		var s_uuid: int = uuid * 10 + 3
-		ai.secondary.set_meta("network_uuid", s_uuid)
-		players.worldItems[s_uuid] = ai.secondary
-		if s_uuid >= players.nextUuid:
-			players.nextUuid = s_uuid + 1
+	ApplyAIDropIds(players, ai, drop_ids)
 
 	if lc:
 		if not lc.is_in_group("CoopLootContainer"):

@@ -21,8 +21,10 @@ var hasTarget: bool = false
 
 func _physics_process(delta: float) -> void:
 	if hasTarget and not isDowned:
-		global_position = global_position.lerp(targetPosition, LERP_SPEED * delta)
-		global_rotation.y = lerp_angle(global_rotation.y, targetRotation.y, LERP_SPEED * delta)
+		# Clamped: above 1.0 the lerp overshoots the target and jitters back.
+		var t: float = clampf(LERP_SPEED * delta, 0.0, 1.0)
+		global_position = global_position.lerp(targetPosition, t)
+		global_rotation.y = lerp_angle(global_rotation.y, targetRotation.y, t)
 
 
 func SetTarget(pos: Vector3, rot: Vector3) -> void:

@@ -433,10 +433,6 @@ func GenerateUuid() -> int:
 	return u
 
 
-func NextPlacementToken() -> int:
-	return GenerateUuid()
-
-
 func _is_trader_display_item(target: Node) -> bool:
 	if target == null:
 		return false

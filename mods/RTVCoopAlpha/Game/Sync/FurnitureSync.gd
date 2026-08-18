@@ -121,30 +121,6 @@ func _physics_process(delta: float) -> void:
 		_move_targets.erase(f)
 
 
-@rpc("any_peer", "reliable", "call_remote")
-func RequestFurnitureLock(fid: int) -> void:
-	if not multiplayer.is_server():
-		return
-	var sender: int = multiplayer.get_remote_sender_id()
-	if _editing_locks.has(fid):
-		DenyFurnitureLock.rpc_id(sender, fid)
-		return
-	_editing_locks[fid] = sender
-	BroadcastFurnitureLock.rpc(fid, sender)
-
-
-func HostLockFurniture(fid: int) -> void:
-	if _editing_locks.has(fid):
-		return
-	_editing_locks[fid] = 1
-	BroadcastFurnitureLock.rpc(fid, 1)
-
-
-@rpc("authority", "reliable", "call_local")
-func BroadcastFurnitureLock(fid: int, peer_id: int) -> void:
-	_editing_locks[fid] = peer_id
-
-
 @rpc("authority", "reliable", "call_remote")
 func DenyFurnitureLock(fid: int) -> void:
 	furniture_lock_denied.emit(fid)

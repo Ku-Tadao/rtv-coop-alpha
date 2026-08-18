@@ -12,7 +12,6 @@ var _broadcast_accum: float = 0.0
 var _local_shot_count: int = 0
 var _was_firing_local: bool = false
 var _prev_shot_accum: Dictionary = {}
-var _bp_logged: bool = false
 
 
 func _ready() -> void:
@@ -176,13 +175,6 @@ func GatherLocalAnimState(controller: Node3D) -> Dictionary:
 	if iface:
 		var bp_slot: Node = iface.get_node_or_null("Equipment/Backpack")
 		var bp_cc: int = bp_slot.get_child_count() if bp_slot else -1
-		if not _bp_logged and bp_cc > 0:
-			_bp_logged = true
-			var l = Engine.get_meta("CoopLogger", null)
-			if l:
-				l.log_msg("LocalState", "BP slot found! children=%d child0=%s" % [bp_cc, str(bp_slot.get_child(0))])
-				var c = bp_slot.get_child(0)
-				l.log_msg("LocalState", "  has_slotData=%s class=%s" % [str("slotData" in c), c.get_class()])
 		if bp_slot and bp_cc > 0:
 			var bp_item = bp_slot.get_child(0)
 			if "slotData" in bp_item and bp_item.slotData and bp_item.slotData.itemData:

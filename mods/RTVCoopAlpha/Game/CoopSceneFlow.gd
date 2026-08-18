@@ -134,8 +134,8 @@ func ScanIfNeeded(_delta: float) -> void:
 	if ai_sync and "_pending_spawns" in ai_sync:
 		ai_sync._pending_spawns.clear()
 	var event_sync: Node = coop.get_sync("event") if coop else null
-	if event_sync and "_pending_events" in event_sync:
-		event_sync._pending_events.clear()
+	if event_sync and event_sync.has_method("reset_scene_state"):
+		event_sync.reset_scene_state()
 	if event_sync and "_sleep_ready" in event_sync:
 		event_sync._sleep_ready.clear()
 	if event_sync and "_sleep_in_progress" in event_sync:
@@ -182,6 +182,12 @@ func ScanIfNeeded(_delta: float) -> void:
 			RequestSceneLootSync.rpc_id(1)
 			if event_sync and event_sync.has_method("RequestFireSync"):
 				event_sync.RequestFireSync.rpc_id(1)
+			# Doors had a manifest and a handler but nothing that asked for them,
+			# so a guest saw every door in its default state -- one the host had
+			# opened read as closed, one they had unlocked read as locked.
+			var interactable_sync: Node = coop.get_sync("interactable") if coop else null
+			if interactable_sync and interactable_sync.has_method("RequestDoorSync"):
+				interactable_sync.RequestDoorSync.rpc_id(1)
 	else:
 		print("[SceneFlow] Map detected but coop not active (active=%s, peer=%s)" % [CoopAuthority.is_active(), multiplayer.multiplayer_peer != null])
 
@@ -256,12 +262,6 @@ func TriggerRescan(delay: float = 1.5) -> void:
 	RegisterSceneItems()
 	RegisterSceneContainers()
 	pendingLootBroadcast = 0.2
-
-
-@rpc("authority", "reliable", "call_remote")
-func ApplySceneChange(scene_name: String) -> void:
-	pendingSceneChange = scene_name
-	pendingSceneTimer = 0.0
 
 
 ## Freeze guests when the host *starts* loading, not when it finishes.

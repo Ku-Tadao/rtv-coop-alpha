@@ -19,6 +19,9 @@ import sys
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lint_rpc  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "mod.txt"
 
@@ -77,6 +80,12 @@ def check_indentation(path: Path, text: str) -> list[str]:
 
 def validate() -> list[str]:
     problems: list[str] = []
+
+    # A mismatched RPC is this mod's worst failure mode: Godot does not check
+    # arity across peers, so the symptom looks nothing like the cause.
+    rpc_report = lint_rpc.lint(lint_rpc.load_sources())
+    for err in rpc_report.errors:
+        problems.append(f"{err.file}:{err.line}: {err.message}")
 
     if not MANIFEST.is_file():
         raise BuildError("mod.txt missing from repo root")
@@ -159,6 +168,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     files = source_files()
+    for warn in lint_rpc.lint(lint_rpc.load_sources()).warnings:
+        print(f"warning: {warn.file}:{warn.line}: {warn.message}")
     print(f"validated {len(files)} file(s)")
     if args.check:
         return 0

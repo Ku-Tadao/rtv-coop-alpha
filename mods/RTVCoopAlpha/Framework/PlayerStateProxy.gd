@@ -76,7 +76,8 @@ func _push_state() -> void:
 
 func _pack() -> PackedFloat32Array:
 	var p := PackedFloat32Array()
-	p.resize(20)
+	# Sized to what _unpack reads. This goes out per player at 20Hz.
+	p.resize(14)
 	p[0] = sync_position.x; p[1] = sync_position.y; p[2] = sync_position.z
 	p[3] = sync_rotation.x; p[4] = sync_rotation.y; p[5] = sync_rotation.z
 	p[6] = sync_anim_blend

@@ -24,6 +24,16 @@ var _pending_events: Array = []
 var _sleep_ready: Dictionary = {}
 var _sleep_in_progress: bool = false
 
+# _find_event_system() falls back to a recursive walk of the whole tree. Pending
+# events were retried every physics frame, so a single event arriving before the
+# event system existed pinned that walk for the rest of the scene.
+const EVENT_SYSTEM_RETRY_INTERVAL := 1.0
+const EVENT_SYSTEM_MAX_RETRIES := 15
+
+var _event_system_cache: Node = null
+var _event_system_retry: float = 0.0
+var _event_system_misses: int = 0
+
 
 func _sync_key() -> String:
 	return "event"
@@ -39,16 +49,43 @@ func _map() -> Node:
 	return coop.scene.get_map() if coop and coop.scene else null
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if _pending_events.is_empty():
 		return
-	var event_system := _find_event_system()
-	if event_system == null:
+	_event_system_retry -= delta
+	if _event_system_retry > 0.0:
 		return
+	_event_system_retry = EVENT_SYSTEM_RETRY_INTERVAL
+	var event_system := _event_system()
+	if event_system == null:
+		_event_system_misses += 1
+		if _event_system_misses >= EVENT_SYSTEM_MAX_RETRIES:
+			push_warning("[EventSync] no EventSystem after %.0fs; dropping %d pending event(s)" % [
+				EVENT_SYSTEM_MAX_RETRIES * EVENT_SYSTEM_RETRY_INTERVAL, _pending_events.size()])
+			_pending_events.clear()
+			_event_system_misses = 0
+		return
+	_event_system_misses = 0
 	var to_process := _pending_events.duplicate()
 	_pending_events.clear()
 	for event in to_process:
 		_apply_event(event["name"], event["params"], event_system)
+
+
+## Cached lookup. The cache is cleared on map change by CoopSceneFlow, alongside
+## _pending_events; a node that dies mid-scene falls through to a fresh search.
+func _event_system() -> Node:
+	if is_instance_valid(_event_system_cache) and _event_system_cache.is_inside_tree():
+		return _event_system_cache
+	_event_system_cache = _find_event_system()
+	return _event_system_cache
+
+
+func reset_scene_state() -> void:
+	_pending_events.clear()
+	_event_system_cache = null
+	_event_system_retry = 0.0
+	_event_system_misses = 0
 
 
 func _find_event_system() -> Node:
@@ -103,7 +140,7 @@ func BroadcastEvent(event_name: String, params: Dictionary) -> void:
 	if not scene_ready:
 		_pending_events.append({"name": event_name, "params": params})
 		return
-	var event_system := _find_event_system()
+	var event_system := _event_system()
 	if event_system == null:
 		_pending_events.append({"name": event_name, "params": params})
 		return
@@ -346,29 +383,6 @@ func BroadcastBTRFire(btr_name: String, full_auto: bool) -> void:
 		await get_tree().create_timer(BTR_CRACK_DELAY_S, false).timeout
 		if is_instance_valid(btr):
 			btr.PlayCrack()
-
-
-@rpc("authority", "reliable", "call_remote")
-func BroadcastRocketExplode(pos: Vector3) -> void:
-	var best: Node = null
-	var best_dist: float = ROCKET_EXPLODE_MATCH_RADIUS
-	for rocket in get_tree().get_nodes_in_group("CoopRocket"):
-		if not is_instance_valid(rocket):
-			continue
-		var d: float = rocket.global_position.distance_to(pos)
-		if d < best_dist:
-			best_dist = d
-			best = rocket
-	if best:
-		best.queue_free()
-	var explosion_scene := load("res://Effects/Explosion.tscn")
-	if explosion_scene:
-		var instance = explosion_scene.instantiate()
-		get_tree().get_root().add_child(instance)
-		instance.global_position = pos
-		instance.size = ROCKET_EXPLOSION_SIZE
-		if instance.has_method("Explode"):
-			instance.Explode()
 
 
 @rpc("authority", "reliable", "call_remote")

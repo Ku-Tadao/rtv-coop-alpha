@@ -25,9 +25,54 @@ Every check exists because the corresponding mistake shipped, or nearly did.
 | `mod.txt` has `[mod]` with `name`, `id`, `version` | The loader keys the mod off these. |
 | `[autoload]` and `[script_extend]` targets exist | A dangling `res://mods/...` path is a silent no-op at load. |
 | `Main.gd` module paths exist | `HOOK_SCRIPTS` / `SYNC_SCRIPTS` are hardcoded arrays; a rename that misses one only shows up as a runtime `push_error`. |
+| **RPC call sites agree with their handlers** | See below. |
 
 Only `res://mods/...` paths are checked. `res://Scripts/...` refers to the
 game's own pck, which is not in this repo.
+
+## The RPC linter
+
+`tools/lint_rpc.py` runs as part of `--check`, and standalone:
+
+```bash
+python tools/lint_rpc.py
+```
+
+A mismatched RPC is this mod's worst failure mode. Godot does not check arity
+between peers — the call is dropped or mangled, and the symptom looks nothing
+like the cause. "Players are invisible but still collide" was one of these.
+
+| Check | Catches |
+|---|---|
+| **arity** | a call passing a number of arguments the handler cannot accept |
+| **unknown** | a call naming a function that no longer carries `@rpc` (a rename that missed a call site) |
+| **agreement** | two call sites of one RPC passing *different* counts |
+| **unused** (warning) | an `@rpc` nothing ever calls |
+
+**agreement is the one that earns its keep.** Every trailing parameter here has
+a default, so dropping one is legal GDScript — the handler silently receives a
+default instead of the value the sender meant, and arity cannot see it. What is
+never legal is two call sites disagreeing: that means the signature grew and one
+caller was missed.
+
+**unused is not cosmetic.** It found `ApplySceneChange`, an RPC that existed
+since 1.0.0 and was never called — which is why guests kept playing for six
+seconds after the host left a scene. It then found `RequestDoorSync`, whose
+handler and manifest both existed while nothing ever asked for them, so guests
+saw every door in its default state.
+
+An RPC whose optional arguments are a deliberate two-mode API opts out with a
+comment above it:
+
+```gdscript
+## Empty means "send me everything you have"; a list means "just these".
+# lint-rpc: optional-args
+@rpc("any_peer", "reliable", "call_remote")
+func RequestAISync(uuids: PackedInt32Array = PackedInt32Array()) -> void:
+```
+
+Opting out is one line in the place that knows the intent. The default stays
+strict.
 
 ## CI
 
