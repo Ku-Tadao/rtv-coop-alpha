@@ -144,6 +144,35 @@ class TestArgumentSplitting(unittest.TestCase):
             lint_rpc._param_arity("p: PackedFloat32Array, s: String = \"\""), (1, 2)
         )
 
+class TestUncheckedSenders(unittest.TestCase):
+    """An `any_peer` handler is reachable by every client. If it never asks who
+    is calling, it acts on whatever it is sent, by whoever sends it."""
+
+    def test_dropping_an_is_server_guard_is_caught(self):
+        files = mutate(
+            sources(),
+            "Game/Sync/PickupSync.gd",
+            "func SubmitPickupRemove(uuid: int) -> void:\n\tif not multiplayer.is_server():\n\t\treturn\n",
+            "func SubmitPickupRemove(uuid: int) -> void:\n",
+        )
+        report = lint_rpc.lint(files)
+        self.assertIn(
+            "never checks who is calling",
+            " | ".join(e.message for e in report.errors),
+        )
+
+    def test_a_sender_id_check_counts_too(self):
+        # Peer-to-peer handlers are legitimate; they just have to establish the
+        # sender rather than believe the payload.
+        rpcs = lint_rpc.collect_rpcs(sources())
+        gain = rpcs["BroadcastMicGain"]
+        self.assertIn("any_peer", gain.modes)
+        self.assertIn("get_remote_sender_id()", gain.body)
+
+    def test_the_sender_is_not_taken_from_the_payload(self):
+        # It used to name itself, so a peer could mute someone else for you.
+        rpcs = lint_rpc.collect_rpcs(sources())
+        self.assertNotIn("peer_id: int", rpcs["BroadcastMicGain"].body.splitlines()[0])
 
 if __name__ == "__main__":
     unittest.main()

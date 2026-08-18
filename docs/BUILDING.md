@@ -198,14 +198,18 @@ The game can die as a hard native process termination: no Godot error, no
 GDScript stack, the log simply stops mid-line. The crash handler writes to
 stderr, which the game's log file does not capture, and the final buffered write
 is lost. **Nothing in the logs will name that crash.** Do not spend time reading
-them for a cause that is not there — bisect instead.
+them for a cause that is not there.
 
-The ladder for the current investigation is already scripted --
-`python tools/mkbisect.py` writes arms 0/A/B/C to `dist/bisect/`, and
-`tests/test_bisect.py` checks each arm is the one below it plus exactly one
-suspect. See [CRASH-BISECT.md](CRASH-BISECT.md) for what each arm answers.
+Bisecting is not the first move either. The ladder tried for the current
+investigation was abandoned, and the reason generalises: local testing runs over
+ENet while the crash was only ever seen over Steam, so an arm that stays clean
+clears nothing. Each arm still costs a full play session. See
+[CRASH-BISECT.md](CRASH-BISECT.md) for what that bought and what replaced it —
+instrumentation in the shipped build, and measuring a suspected mechanism
+directly with [tools/rig-inspect](../tools/rig-inspect) instead of reasoning
+about it.
 
-For a new bisect: because the whole mod is data in a zip, an arm is cheap --
+If you do bisect: because the whole mod is data in a zip, an arm is cheap --
 take the known good archive and swap in one changed file.
 
 ```python

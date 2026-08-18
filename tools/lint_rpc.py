@@ -7,13 +7,14 @@ these. So was `ApplySceneChange`, an RPC that existed for a year and was never
 called by anything, which is why guests learned about scene changes six seconds
 late.
 
-Three things are checked:
+Five things are checked:
 
   arity      every `.rpc(...)` / `.rpc_id(...)` passes a legal number of
              arguments for the function it names
   unknown    every `.rpc(...)` names a function that actually carries `@rpc`
   unused     every `@rpc` function is called from somewhere
   agreement  all call sites of one RPC pass the same number of arguments
+  unchecked  every `@rpc("any_peer")` handler establishes who is calling
 
 `agreement` is the one that catches real damage. Arity alone cannot: every
 trailing parameter here has a default, so dropping one is legal GDScript and the
@@ -24,6 +25,11 @@ updated and the other was missed.
 An RPC whose optional arguments are a deliberate two-mode API says so with a
 `# lint-rpc: optional-args` comment above it. Opting out is one line in the one
 place that knows the intent; the default stays strict.
+
+`unchecked` is the systematic version of a bug that has been fixed twice here by
+hand. An `any_peer` handler is reachable by any client; if it never consults
+`is_server()` or `get_remote_sender_id()` it will act on whatever it is sent, by
+whoever sends it.
 
 `unused` is a warning, not an error: a handler can legitimately be called only
 by the peer that never runs this code path. It still gets printed, because a
@@ -50,6 +56,7 @@ class RpcFunc:
     name: str
     file: str
     line: int
+    body: str
     min_args: int
     max_args: int
     modes: tuple = ()
@@ -163,8 +170,12 @@ def collect_rpcs(files: dict) -> dict:
                     continue
                 params = _read_call_args(src, src.index(lines[look]) + lines[look].index("("))
                 lo, hi = _param_arity(params or "")
+                start = src.index(lines[look])
+                nxt = src.find("\nfunc ", start + 1)
+                body = src[start:] if nxt == -1 else src[start:nxt]
                 rpcs[fm.group(1)] = RpcFunc(
-                    fm.group(1), rel, look + 1, lo, hi, modes, optional_ok=optional_ok
+                    fm.group(1), rel, look + 1, body, lo, hi, modes,
+                    optional_ok=optional_ok,
                 )
                 break
     return rpcs
@@ -214,6 +225,16 @@ def lint(files: dict) -> Report:
                 )
 
     for name, r in sorted(rpcs.items()):
+        if "any_peer" in r.modes and not (
+            "is_server()" in r.body or "get_remote_sender_id()" in r.body
+        ):
+            report.errors.append(
+                Problem(
+                    r.file,
+                    r.line,
+                    f'@rpc("any_peer") `{name}` never checks who is calling',
+                )
+            )
         # Trailing defaults make a short call legal, so arity cannot catch a call
         # site that was missed when the signature grew. Disagreement can.
         if len(r.arg_counts) > 1 and not r.optional_ok:

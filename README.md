@@ -117,43 +117,62 @@ authority model, and how a remote player is actually drawn.
 
 ## Known issues
 
-These are reproduced and understood, and are what the `dev` branch is for.
-
 - **Host crashes.** Hard native process termination with no Godot error and no
   stack — the log just stops mid-line. Present in the `improved-v1..v4` builds,
-  not in the released `1.0.0`. Currently being bisected across three files —
-  see [docs/CRASH-BISECT.md](docs/CRASH-BISECT.md) for the evidence, the
-  suspects, and the arms to run.
-- **Wrong container opens.** Shelter furniture and scene loot containers draw
-  ids from two independent counters into the same key, and clients guess
-  unmatched ids by proximity — so opening a Locker can open a Nightstand. Fixed
-  on `dev`.
-- **First shelter furniture never syncs.** The furniture id counter starts at 0
-  while 0 is the "no id" sentinel, so the first item is skipped on every map
-  load. Fixed on `dev`.
-- **The host's own weapon fired when a guest pulled the trigger**, and aim
-  could stay blocked after a guest sprinted. The AI hook borrows the shared
-  `GameData` flags each tick and restored them from a callback registered via
+  not in the released `1.0.0`. Still unresolved. The leading suspect for a long
+  time — a node leak in the puppet muzzle effect — has been **disproven by
+  measurement**; see [docs/CRASH-BISECT.md](docs/CRASH-BISECT.md) for what is
+  ruled out, what remains, and what the next crash session needs.
+- **A save already damaged by the guest-overwrite bug is not repaired** by the
+  fix for it. Restore from a backup — see [docs/BACKUP.md](docs/BACKUP.md).
+- **Strafing and backwards movement look wrong on remote players.** The AI rig
+  the puppets are built from has no sideways clips at all, so a strafing player
+  is drawn walking forwards. Backwards clips *do* exist and are simply never
+  selected. Neither is fixed yet.
+- **The co-op menu only offers Steam lobbies.** Direct IP is reachable through
+  the loopback keys but has no UI.
+
+### Fixed since 1.0.0
+
+Kept here because each one is a shape worth recognising, not just a line item.
+
+- **AI drops collided with world items.** Dropped weapons, backpacks and
+  secondaries took ids derived as `uuid * 10 + n` while scene pickups were
+  numbered `0..N` from the same counter — and scenes register 85–143 items. Two
+  nodes answered to one id, so taking one could delete the other. *(1.2.0)*
+- **Two guests could take the same item.** Pickups were applied locally and the
+  host told afterwards, with no arbitration. Now the host grants or denies,
+  the way containers always have. *(1.2.0)*
+- **Doors were never synced.** The manifest and the handler both existed and
+  nothing ever asked for them, so a guest saw every door in its default state.
+  Found by the RPC linter, not by playing. *(1.1.8)*
+- **Guests kept playing for ~6 seconds after the host left a scene**, because
+  the only notification arrived after the host's own load. Anything looted in
+  that window was lost. *(1.1.7)*
+- **Wrong container opens.** Shelter furniture and scene loot containers drew
+  ids from two independent counters into the same key, and clients guessed
+  unmatched ids by proximity — so opening a Locker could open a Nightstand.
+- **First shelter furniture never synced.** The id counter started at 0 while 0
+  was the "no id" sentinel, so the first item was skipped on every map load.
+- **The host's own weapon fired when a guest pulled the trigger**, and aim could
+  stay blocked after a guest sprinted. The AI hook borrowed shared `GameData`
+  flags and restored them from a callback registered via
   `register_replace_or_post`, which only registers the restore if the replace
-  slot was already taken — so it never ran. Fixed on `dev`.
+  slot was already taken — so it never ran.
 - **Only F11 ended a session.** Returning to the main menu left the peer alive,
-  because `CoopNet` sits outside the scene tree — guests kept playing in a world
-  the host had stopped simulating. Quitting left them on a 90-second peer
-  timeout. Fixed on `dev`.
+  so guests kept playing in a world the host had stopped simulating.
 - **AI weapons could be picked up twice by a guest.** Clients grow AI pools
-  locally, so a paused pooled agent's weapon exists only on the guest and has no
-  host-assigned uuid. The interact hook fell through to the vanilla pickup for
-  unnumbered items, minting a copy the host never saw — then the same gun
-  dropped again from the corpse. Trader display weapons were takeable the same
-  way. Fixed on `dev`; guests now refuse anything the host has not numbered.
+  locally, so a paused pooled agent's weapon existed only on the guest with no
+  host-assigned uuid, and the interact hook fell through to the vanilla pickup.
 - **A guest's own save could be overwritten by the host's world.** The save
   hooks guarded on `is_client()`, which goes false the instant the transport
-  drops — while the guest is still standing in the host's cabin. Nothing sent
-  them back to the menu, so the next save wrote the host's shelter, world and
-  character over their own. Fixed on `dev`; a save already damaged this way is
-  not repaired by the fix.
-
----
+  drops — while the guest is still standing in the host's cabin.
+- **Any client could drive any other player's puppet**, and submit state on
+  their behalf. Both player-state RPCs were `any_peer` with no sender check.
+  *(1.1.10)*
+- **A guest who disconnected mid-action left things locked for everyone** —
+  furniture being placed, and later pickups. The releases were written; one was
+  never called. *(1.2.0)*
 
 ## Contributing
 

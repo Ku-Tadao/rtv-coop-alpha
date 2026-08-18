@@ -86,7 +86,7 @@ func _ready() -> void:
 func _on_peer_joined(peer_id: int, _display_name: String = "") -> void:
 	if not _net_active():
 		return
-	BroadcastMicGain.rpc_id(peer_id, multiplayer.get_unique_id(), mic_gain_linear)
+	BroadcastMicGain.rpc_id(peer_id, mic_gain_linear)
 
 
 func _on_peer_left(peer_id: int) -> void:
@@ -455,12 +455,18 @@ func SetMicGain(linear: float) -> void:
 func _broadcast_mic_gain_to_all() -> void:
 	if not _net_active():
 		return
-	BroadcastMicGain.rpc(multiplayer.get_unique_id(), mic_gain_linear)
+	BroadcastMicGain.rpc(mic_gain_linear)
 
 
+## Peer-to-peer by design: everyone tells everyone their own mic gain. The
+## sender used to name itself in the payload, so a peer could claim to be
+## someone else and mute them for you. Who sent it is not theirs to assert.
 @rpc("any_peer", "reliable", "call_remote")
-func BroadcastMicGain(peer_id: int, gain: float) -> void:
-	_peer_mic_gain[peer_id] = clampf(gain, 0.0, 2.0)
+func BroadcastMicGain(gain: float) -> void:
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender == 0:
+		return
+	_peer_mic_gain[sender] = clampf(gain, 0.0, 2.0)
 
 
 func SetMaxHearingDistance(meters: float) -> void:

@@ -6,6 +6,7 @@ scene change and guests kept playing in a world the host was no longer
 simulating.
 """
 
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -62,3 +63,50 @@ class TestSharedGameDataIsRestored(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEveryPerPeerReleaseIsWired(unittest.TestCase):
+    """Locks held on behalf of a peer must be given back when it leaves.
+
+    This has now been the same bug three times: ContainerSync, PickupSync and
+    FurnitureSync each had the release written and one of them was never called,
+    so a guest who dropped mid-action left the thing locked for everyone else
+    for the rest of the session. The release existing is not the same as the
+    release running.
+    """
+
+    RELEASE_PATTERN = re.compile(
+        r"^func ((?:[Rr]elease|on)\w*(?:[Ff]or[Pp]eer|_for_peer|_peer_left))\s*\(",
+        re.MULTILINE,
+    )
+
+    def test_no_release_is_left_uncalled(self):
+        from gdsource import sources
+
+        definitions = {}
+        for rel, src in sources():
+            for m in self.RELEASE_PATTERN.finditer(src):
+                definitions[m.group(1)] = rel
+
+        self.assertTrue(definitions, "pattern matched nothing; the guard is asleep")
+
+        all_src = {rel: src for rel, src in sources()}
+        for name, home in definitions.items():
+            callers = [
+                rel
+                for rel, src in all_src.items()
+                if f"{name}(" in src and not (rel == home and src.count(f"{name}(") == 1)
+            ]
+            self.assertTrue(
+                callers, f"{home}: {name} is defined but never called"
+            )
+
+    def test_the_known_releases_run_on_peer_left(self):
+        body = func(read("Game/CoopPlayers.gd"), "_on_peer_left")
+        for name in (
+            "release_holders_for_peer",   # containers
+            "release_claims_for_peer",    # pickups
+            "ReleaseLockForPeer",         # furniture
+            "on_peer_left",               # downed
+        ):
+            self.assertIn(name, body, f"{name} not called when a peer leaves")

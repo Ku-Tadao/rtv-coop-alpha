@@ -322,6 +322,11 @@ func _on_peer_left(peer_id: int) -> void:
 		var ps: Node = coop.get_sync("pickup") if coop else null
 		if ps and ps.has_method("release_claims_for_peer"):
 			ps.release_claims_for_peer(peer_id)
+		# Furniture had the release written and never called, so a guest who
+		# dropped mid-placement left that piece locked for everyone.
+		var fs2: Node = coop.get_sync("furniture") if coop else null
+		if fs2 and fs2.has_method("ReleaseLockForPeer"):
+			fs2.ReleaseLockForPeer(peer_id)
 		var es: Node = coop.get_sync("event") if coop else null
 		if es and "_sleep_ready" in es and es._sleep_ready.has(peer_id):
 			es._sleep_ready.erase(peer_id)
