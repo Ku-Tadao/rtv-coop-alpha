@@ -85,6 +85,34 @@ func _ready():
         animPlayer.play("Rifle_Idle", 0.3)
 
     call_deferred("CaptureInitialWeaponFile")
+    call_deferred("_coop_probe_rig")
+
+
+# Logged once per puppet so we know what the rig actually offers before promising
+# animations. The mod plays named clips off an AnimationPlayer and disables the
+# AnimationTree, but the AI code drives blend spaces like
+# "parameters/Rifle/Combat/blend_position" with a strafe value -- so directional
+# locomotion may already exist and simply not be reachable the way we drive it.
+func _coop_probe_rig() -> void:
+    await get_tree().process_frame
+    if aiInstance == null:
+        return
+    var player := aiInstance.get_node_or_null("Guard/Animations")
+    if player and player is AnimationPlayer:
+        var clips: PackedStringArray = player.get_animation_list()
+        _coop_log("rig clips (%d): %s" % [clips.size(), ", ".join(clips)])
+    else:
+        _coop_log("rig clips: no AnimationPlayer at Guard/Animations")
+
+    if aiInstance.animator:
+        var params: Array = []
+        for prop in aiInstance.animator.get_property_list():
+            var n: String = str(prop.get("name", ""))
+            if n.begins_with("parameters/"):
+                params.append(n)
+        _coop_log("rig tree params (%d): %s" % [params.size(), ", ".join(params)])
+    else:
+        _coop_log("rig tree: no AnimationTree")
 
 
 func CaptureInitialWeaponFile():
@@ -432,8 +460,26 @@ func _apply_puppet_backpack(file: String):
         bp_mesh.visibility_range_end = 400.0
 
 
+# The spine bone is rotated by the sender's camera pitch, unclamped. Look far
+# enough down and the torso over-rotates until the weapon swings out behind the
+# character. Raised looks correct, so the limits are asymmetric.
+#
+# Sign convention was not verified against the rig -- if the wrong end clamps,
+# swap these two numbers. _apply_puppet_spine_pitch logs the raw value when it
+# saturates, so the real range is observable rather than guessed.
+const SPINE_PITCH_MIN := -0.9
+const SPINE_PITCH_MAX := 1.2
+
+var _pitch_clamp_logged: bool = false
+
+
 func _apply_puppet_spine_pitch(pitch: float):
-    _spine_target = pitch
+    var limited: float = clampf(pitch, SPINE_PITCH_MIN, SPINE_PITCH_MAX)
+    if not is_equal_approx(limited, pitch) and not _pitch_clamp_logged:
+        _pitch_clamp_logged = true
+        _coop_log("spine pitch clamped: raw=%.3f -> %.3f (limits %.2f..%.2f)" % [
+            pitch, limited, SPINE_PITCH_MIN, SPINE_PITCH_MAX])
+    _spine_target = limited
 
 
 var _puppet_spotlight: SpotLight3D = null
