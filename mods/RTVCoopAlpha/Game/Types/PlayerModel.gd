@@ -158,6 +158,13 @@ func _pick_animation(state: Dictionary) -> String:
 
     match condition:
         "Group":
+            # A lowered weapon is the Guard pose. Without this, a lowered weapon
+            # still renders on an aiming clip and the spine override drives it
+            # into the body when the player looks down.
+            if not state.get("hasWeapon", true):
+                return "Trader"
+            if int(state.get("weaponPosition", 1)) == 1:
+                return prefix + "_Guard"
             return prefix + "_Idle"
         "Guard":
             return prefix + "_Guard"
@@ -177,8 +184,11 @@ func _pick_animation(state: Dictionary) -> String:
         "Hunt":
             if blend >= 0.5:
                 return prefix + "_Aim_Crouch_F"
-            else:
-                return prefix + "_Aim_Crouch_Idle"
+            # Crouching with the weapon down is Squat; Aim_Crouch_Idle raises it,
+            # which is why crouching forced the weapon up.
+            if int(state.get("weaponPosition", 1)) == 1:
+                return prefix + "_Squat"
+            return prefix + "_Aim_Crouch_Idle"
 
     return prefix + "_Idle"
 
@@ -467,7 +477,9 @@ func _apply_puppet_backpack(file: String):
 # Sign convention was not verified against the rig -- if the wrong end clamps,
 # swap these two numbers. _apply_puppet_spine_pitch logs the raw value when it
 # saturates, so the real range is observable rather than guessed.
-const SPINE_PITCH_MIN := -0.9
+# Measured, not guessed: looking fully down reports raw pitch -0.965, and at
+# -0.9 the weapon was still inside the torso. Down is the negative end.
+const SPINE_PITCH_MIN := -0.45
 const SPINE_PITCH_MAX := 1.2
 
 var _pitch_clamp_logged: bool = false

@@ -160,6 +160,9 @@ func GatherLocalAnimState(controller: Node3D) -> Dictionary:
 			if knife_item.slotData and knife_item.slotData.itemData:
 				state["weaponFile"] = knife_item.slotData.itemData.file
 
+	# The puppet cannot tell a lowered weapon from a raised one without this, so
+	# every pose defaulted to the aiming variant.
+	state["weaponPosition"] = gameData.weaponPosition
 	state["isFiring"] = gameData.isFiring
 	state["shots"] = _local_shot_count
 	_local_shot_count = 0
