@@ -1,5 +1,11 @@
 # Open investigation: host hard-crash
 
+> **Superseded.** The bisect ladder described below was abandoned in favour of
+> shipping one build with every fix and catching the crash with logs and a crash
+> dump. `v1.1.0` carries all three former suspects plus instrumentation; see
+> [HANDOFF.md](HANDOFF.md#5-current-approach). Kept for the evidence it records —
+> what was ruled out and why — not as a workflow to follow.
+
 **Status: unresolved, actively bisecting.** This file is the working record so
 the next session does not repeat the dead ends.
 

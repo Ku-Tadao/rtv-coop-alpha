@@ -241,33 +241,35 @@ Full detail in [BUILDING.md](BUILDING.md#testing-two-instances-on-one-pc).
 
 ---
 
-## 5. Where the bisect stands
+## 5. Current approach
 
-The decision in §5 of the previous handoff is taken: **the ladder is built from
-`dev`, and arm 0 is the control.**
+Bisecting is set aside. `v1.1.0` on `dev` ships every fix **and** all three
+former crash suspects, instrumented so the next crash explains itself.
 
-```
-python tools/mkbisect.py        # -> dist/bisect/RTVCoopAlpha-arm{0,A,B,C}.vmz
-```
+Everything diagnostic goes through `CoopLogger.log_msg`, which flushes per line.
+That is the whole point: `godot.log` loses its final buffered write when the
+process dies, so `coop_debug.log` is the only sink whose last entry survives.
 
-| Arm | Contents | Question it answers |
-|---|---|---|
-| **0** | `dev`, no suspects | is our own fixed base clean? |
-| **A** | 0 + `LocalStateSync.gd` | |
-| **B** | A + `PlayerStateProxy.gd` | |
-| **C** | B + `PlayerModel.gd` | equals the v4-era build, known to crash |
+- **Heartbeat every 15s** — node count, peak, object count, orphans, static
+  memory, fps, peer count. Tests the leak hypothesis directly: climbing counters
+  with a last-line reading means exhaustion, flat counters to the cut rule it
+  out and send you to the dump.
+- **Every 25th remote shot** with the muzzle child count, because
+  `PlayPuppetFireEffect` adds two nodes to a muzzle `SwapWeapon` never cleans.
+- **Weapon swaps** with the number of children freed.
+- **Weapon-file transitions** only, not the 20Hz packet rate.
+- **AI death broadcast payload sizes**, since one crash followed a dead-AI
+  interaction.
 
-The suspect versions live in `tools/bisect/v4/`, so the ladder no longer depends
-on scratch builds that were only ever in a temp directory. `tests/test_bisect.py`
-asserts each arm is the one below it plus exactly one suspect -- the property a
-stale source path silently broke last time.
+Host prep before a session: enable WER local dumps for `RTV.exe`
+(`DumpType=2`), launch with stderr redirected to a file since Godot's crash
+handler writes there and the game log never receives it, and back up the save.
+Collect `coop_debug.log`, `logs/`, the `.dmp`, and the console capture **from
+both machines**.
 
-**Arm 0 is installed** (`.../Road to Vostok/mods/RTVCoopAlpha-arm0.vmz`); the
-earlier `1.0.0`-based arm A is removed. The banked "arm A survived one firefight"
-result is superseded -- it was one fight on a different base.
-
-Next: play arm 0 with two instances, shooting and AI, on both peers. If it holds,
-move up to A. Keep in mind the asymmetry from §2 -- clean clears nothing.
+The single most valuable fact a dump gives is the faulting module. If it names
+GodotSteam, all three sync files are innocent and the transport is the cause —
+which the ENet-only local testing could never have shown.
 
 ## 6. Traps this session actually hit
 
