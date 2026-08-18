@@ -41,6 +41,9 @@ func _on_loadscene_post(scene_name: String = "") -> void:
 	if CoopAuthority.is_active():
 		randomize()
 		_log("LoadScene POST: restored random")
+	# Back at the menu means back in our own context, so local saves are safe again.
+	if scene_name == "Menu" and net and net.has_method("ClearGuest"):
+		net.ClearGuest()
 	await get_tree().process_frame
 	if events == null:
 		return
@@ -50,7 +53,7 @@ func _on_loadscene_post(scene_name: String = "") -> void:
 
 
 func _replace_savecharacter() -> void:
-	if CoopAuthority.is_client():
+	if CoopAuthority.is_client() or CoopAuthority.is_guest():
 		CoopHook.skip_super()
 
 
@@ -60,7 +63,7 @@ func _post_savecharacter() -> void:
 
 
 func _replace_saveworld() -> void:
-	if CoopAuthority.is_client():
+	if CoopAuthority.is_client() or CoopAuthority.is_guest():
 		CoopHook.skip_super()
 
 
@@ -69,7 +72,7 @@ func _post_saveworld() -> void:
 
 
 func _replace_saveshelter(_target = null) -> void:
-	if CoopAuthority.is_client():
+	if CoopAuthority.is_client() or CoopAuthority.is_guest():
 		CoopHook.skip_super()
 
 
@@ -78,7 +81,7 @@ func _post_saveshelter(_target = null) -> void:
 
 
 func _replace_savetrader(_trader = null) -> void:
-	if CoopAuthority.is_client():
+	if CoopAuthority.is_client() or CoopAuthority.is_guest():
 		CoopHook.skip_super()
 
 

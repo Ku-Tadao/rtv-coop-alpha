@@ -132,6 +132,12 @@ These are reproduced and understood, and are what the `dev` branch is for.
   load. Fixed on `dev`.
 - Aiming can stay blocked after sprinting, because the AI hook borrows the
   shared `GameData` movement flags and does not always restore them.
+- **A guest's own save could be overwritten by the host's world.** The save
+  hooks guarded on `is_client()`, which goes false the instant the transport
+  drops — while the guest is still standing in the host's cabin. Nothing sent
+  them back to the menu, so the next save wrote the host's shelter, world and
+  character over their own. Fixed on `dev`; a save already damaged this way is
+  not repaired by the fix.
 
 ---
 

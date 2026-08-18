@@ -26,6 +26,12 @@ var mode: Mode = Mode.NONE
 var transport: Transport = Transport.ENET
 var peer = null
 
+# Sticky for the whole time we are inside someone else's world. is_client() goes
+# false the instant the transport drops, which is exactly when the local save
+# still needs protecting -- the player is standing in the host's cabin holding
+# the host's loot. Cleared only once we are back in our own context (the menu).
+var _was_guest: bool = false
+
 
 func _enter_tree() -> void:
 	var coop := RTVCoop.get_instance()
@@ -133,6 +139,7 @@ func JoinSteam(host_id: int) -> bool:
 	peer = p
 	multiplayer.multiplayer_peer = peer
 	mode = Mode.CLIENT
+	_was_guest = true
 	print("[CoopNet] JOINING Steam host %d..." % host_id)
 	var _l = Engine.get_meta("CoopLogger", null)
 	if _l: _l.set_peer_label("CLIENT")
@@ -148,6 +155,7 @@ func _join_enet(address: String, port: int) -> bool:
 	peer = p
 	multiplayer.multiplayer_peer = peer
 	mode = Mode.CLIENT
+	_was_guest = true
 	print("[CoopNet] JOINING %s:%d..." % [address, port])
 	var _l = Engine.get_meta("CoopLogger", null)
 	if _l: _l.set_peer_label("CLIENT")
@@ -218,6 +226,14 @@ func _on_connection_failed() -> void:
 	connection_failed_signal.emit()
 
 
+func WasGuest() -> bool:
+	return _was_guest
+
+
+func ClearGuest() -> void:
+	_was_guest = false
+
+
 func _on_server_disconnected() -> void:
 	print("[CoopNet] host disconnected")
 	peer = null
@@ -226,6 +242,12 @@ func _on_server_disconnected() -> void:
 	disconnected.emit()
 	_notify_authority_changed()
 	_notify_event(&"transport_disconnected", [])
+	# Do not leave the guest standing in a world that no longer has an authority.
+	# Every extra second there is a chance of a save writing the host's shelter,
+	# world or character over their own.
+	if _was_guest:
+		Loader.Message("Host ended the session", Color.ORANGE)
+		Loader.LoadScene("Menu")
 
 
 func _notify_authority_changed() -> void:

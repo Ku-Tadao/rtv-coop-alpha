@@ -28,6 +28,13 @@ static func is_client() -> bool:
 	return n.IsClient() if n.has_method("IsClient") else false
 
 
+static func is_guest() -> bool:
+	# True while inside another player's world, and still true after the host
+	# drops, unlike is_client(). Use this to guard anything that writes locally.
+	var n := _net()
+	return n != null and n.has_method("WasGuest") and n.WasGuest()
+
+
 static func local_peer_id() -> int:
 	var n := _net()
 	if n == null or not n.has_method("GetLocalPeerId"):
