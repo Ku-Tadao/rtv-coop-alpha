@@ -156,13 +156,17 @@ func _pick_animation(state: Dictionary) -> String:
     var condition: String = state.get("animCondition", "Group")
     var blend: float = state.get("animBlend", 1.0)
 
+    # The rig ships no unarmed locomotion at all -- Trader is the only clip with
+    # empty hands, and it is a standing pose. Anything other than standing still
+    # will show a carry pose no matter what we pick.
+    if not state.get("hasWeapon", true):
+        return "Trader"
+
     match condition:
         "Group":
             # A lowered weapon is the Guard pose. Without this, a lowered weapon
             # still renders on an aiming clip and the spine override drives it
             # into the body when the player looks down.
-            if not state.get("hasWeapon", true):
-                return "Trader"
             if int(state.get("weaponPosition", 1)) == 1:
                 return prefix + "_Guard"
             return prefix + "_Idle"
@@ -184,10 +188,9 @@ func _pick_animation(state: Dictionary) -> String:
         "Hunt":
             if blend >= 0.5:
                 return prefix + "_Aim_Crouch_F"
-            # Crouching with the weapon down is Squat; Aim_Crouch_Idle raises it,
-            # which is why crouching forced the weapon up.
-            if int(state.get("weaponPosition", 1)) == 1:
-                return prefix + "_Squat"
+            # Squat was tried here for a lowered weapon and is a resting squat,
+            # not a tactical crouch. Aim_Crouch_Idle reads better even though it
+            # raises the weapon.
             return prefix + "_Aim_Crouch_Idle"
 
     return prefix + "_Idle"
@@ -479,19 +482,38 @@ func _apply_puppet_backpack(file: String):
 # saturates, so the real range is observable rather than guessed.
 # Measured, not guessed: looking fully down reports raw pitch -0.965, and at
 # -0.9 the weapon was still inside the torso. Down is the negative end.
-const SPINE_PITCH_MIN := -0.45
+# Tunable live: F6 lowers the limit, F7 raises it, F8 reports the current value
+# and the deepest raw pitch seen. Shared across every puppet so one adjustment
+# applies to all of them. Read the value out of the log and hard-code it here
+# once it looks right -- this is a calibration knob, not a feature.
+static var spine_pitch_min: float = -0.45
 const SPINE_PITCH_MAX := 1.2
+const SPINE_TUNE_STEP := 0.05
+
+static var _deepest_raw: float = 0.0
 
 var _pitch_clamp_logged: bool = false
 
 
 func _apply_puppet_spine_pitch(pitch: float):
-    var limited: float = clampf(pitch, SPINE_PITCH_MIN, SPINE_PITCH_MAX)
-    if not is_equal_approx(limited, pitch) and not _pitch_clamp_logged:
-        _pitch_clamp_logged = true
-        _coop_log("spine pitch clamped: raw=%.3f -> %.3f (limits %.2f..%.2f)" % [
-            pitch, limited, SPINE_PITCH_MIN, SPINE_PITCH_MAX])
-    _spine_target = limited
+    _deepest_raw = minf(_deepest_raw, pitch)
+    _spine_target = clampf(pitch, spine_pitch_min, SPINE_PITCH_MAX)
+
+
+func _input(event: InputEvent) -> void:
+    if not (event is InputEventKey and event.pressed and not event.echo):
+        return
+    match event.physical_keycode:
+        KEY_F6:
+            spine_pitch_min -= SPINE_TUNE_STEP
+        KEY_F7:
+            spine_pitch_min += SPINE_TUNE_STEP
+        KEY_F8:
+            _coop_log("SPINE TUNE: min=%.2f deepest_raw=%.3f" % [spine_pitch_min, _deepest_raw])
+            return
+        _:
+            return
+    _coop_log("SPINE TUNE: min=%.2f" % spine_pitch_min)
 
 
 var _puppet_spotlight: SpotLight3D = null
