@@ -215,13 +215,15 @@ func RegisterSceneContainers() -> void:
 		if root == null or seen.has(root):
 			continue
 		seen[root] = true
-		# Shelter furniture is identified by its furniture id in _broadcast_shelter_furniture.
-		# Stamping it here too would put two different ids on one node, and collide with a
-		# scene container that happens to draw the same number.
-		if _is_shelter_furniture(root):
-			continue
 		if not root.is_in_group("CoopLootContainer"):
 			root.add_to_group("CoopLootContainer")
+		# Shelter furniture takes its id from _broadcast_shelter_furniture. Stamping it
+		# here too would put two different ids on one node, and collide with a scene
+		# container that happens to draw the same number. Only the id is skipped --
+		# group membership decides whether the container syncs at all, which is a
+		# separate question from who numbers it.
+		if _is_shelter_furniture(root):
+			continue
 		if CoopAuthority.is_host() and not root.has_meta("coop_container_id"):
 			root.set_meta("coop_container_id", _players.nextContainerId)
 			_players.nextContainerId += 1
@@ -558,6 +560,8 @@ func _broadcast_container_storage_to(peer_id: int) -> void:
 		for slot in root.storage:
 			storage_arr.append(ss.SerializeSlotData(slot))
 		var cid: int = cs._node_id(root)
+		if cid <= 0:
+			continue
 		if peer_id == 0:
 			cs.BroadcastContainerFullState.rpc(cid, root.global_position, loot_arr, storage_arr, root.storaged)
 		else:

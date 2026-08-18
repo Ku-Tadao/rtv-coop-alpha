@@ -39,6 +39,25 @@ class TestSingleIdSource(unittest.TestCase):
             "furniture must be skipped before the scene counter stamps it",
         )
 
+    def test_furniture_still_joins_the_sync_group(self):
+        # Regression: skipping furniture for id assignment also skipped
+        # add_to_group("CoopLootContainer"), which dropped those containers out of
+        # sync entirely and made the host broadcast them with cid 0.
+        scene_flow = read("Game/CoopSceneFlow.gd")
+        self.assertLess(
+            scene_flow.index('root.add_to_group("CoopLootContainer")'),
+            scene_flow.index("if _is_shelter_furniture(root):"),
+            "group membership must be decided before the id-source skip",
+        )
+
+    def test_unregistered_containers_are_not_broadcast(self):
+        # A container with no host-assigned id has nothing to say, and the receiver
+        # rejects cid <= 0 anyway -- broadcasting it is pure log noise.
+        scene_flow = read("Game/CoopSceneFlow.gd")
+        body = scene_flow[scene_flow.index("func _broadcast_container_storage_to"):]
+        body = body[: body.index("BroadcastContainerFullState.rpc")]
+        self.assertIn("cid <= 0", body)
+
     def test_furniture_ids_start_past_the_sentinel(self):
         # _broadcast_shelter_furniture treats fid 0 as "no players" and skips the
         # item, so a counter starting at 0 dropped the first furniture every load.
