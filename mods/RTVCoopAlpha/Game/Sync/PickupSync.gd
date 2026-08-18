@@ -6,12 +6,25 @@ extends "res://mods/RTVCoopAlpha/Game/Sync/BaseSync.gd"
 const PICKUP_LERP_SPEED := 18.0
 const PICKUP_LERP_EPSILON := 0.01
 
+## How long the host holds an item for a guest that has been granted it. The
+## guest answers within a round trip; this only matters when it never answers at
+## all -- a crash or a drop mid-pickup -- and without it that item stays locked
+## for the rest of the session.
+const PICKUP_CLAIM_TIMEOUT := 5.0
+
 
 signal placement_token_received(token: int, uuid: int)
 
 
 var _pickup_targets: Dictionary = {}
 var _next_placement_token: int = 0
+
+# Host: uuid -> {"peer": int, "t": float}. One item, one taker.
+var _pickup_claims: Dictionary = {}
+# Client: uuid -> seconds left to hear back, so holding the interact key is one
+# request rather than one per frame. It expires for the same reason the host's
+# claim does: a request that is never answered must not block the item forever.
+var _awaiting_grant: Dictionary = {}
 
 
 func _sync_key() -> String:
@@ -40,6 +53,25 @@ func _container_sync() -> Node:
 
 func _physics_process(delta: float) -> void:
 	_lerp_pickup_targets(delta)
+	_expire_pickup_claims(delta)
+
+
+func _expire_pickup_claims(delta: float) -> void:
+	if not _awaiting_grant.is_empty():
+		for uuid in _awaiting_grant.keys():
+			_awaiting_grant[uuid] -= delta
+			if _awaiting_grant[uuid] <= 0.0:
+				_awaiting_grant.erase(uuid)
+	if _pickup_claims.is_empty() or not multiplayer.is_server():
+		return
+	var expired: Array = []
+	for uuid in _pickup_claims:
+		_pickup_claims[uuid]["t"] -= delta
+		if _pickup_claims[uuid]["t"] <= 0.0:
+			expired.append(uuid)
+	for uuid in expired:
+		_log("claim on uuid=%d expired (peer %d never answered)" % [uuid, int(_pickup_claims[uuid]["peer"])])
+		_pickup_claims.erase(uuid)
 
 
 func _lerp_pickup_targets(delta: float) -> void:
@@ -85,19 +117,47 @@ func NextPlacementToken() -> int:
 	return _next_placement_token
 
 
+## Ask for an item.
+##
+## Guests are granted it before they get it. The old path added the item to the
+## local inventory and told the host afterwards, so two guests interacting with
+## the same pickup in the same moment both succeeded and the item was
+## duplicated. Containers have always worked the other way -- RequestContainerOpen
+## grants or denies -- and this mirrors that.
+##
+## The cost is one round trip before the item appears for a guest. That is what
+## correctness costs here, and it is the same wait opening a container already has.
 func RequestPickup(uuid: int) -> void:
 	if not CoopAuthority.is_active():
 		return
+	if CoopAuthority.is_host():
+		# The authority does not ask itself for permission, but it still has to
+		# respect a claim a guest is already holding.
+		if _pickup_claims.has(uuid):
+			_pickup_denied_feedback()
+			return
+		_take_pickup(uuid)
+		return
+	if _awaiting_grant.has(uuid):
+		return
+	_awaiting_grant[uuid] = PICKUP_CLAIM_TIMEOUT
+	RequestPickupClaim.rpc_id(1, uuid)
+
+
+## Move the item into the local inventory and tell everyone it is gone.
+## Returns false when the inventory had no room, which is the caller's cue to
+## give the claim back.
+func _take_pickup(uuid: int) -> bool:
 	var players := _players()
 	if players == null or not players.worldItems.has(uuid):
-		return
+		return false
 	var pickup: Node = players.worldItems[uuid]
 	if not is_instance_valid(pickup):
 		players.worldItems.erase(uuid)
-		return
+		return false
 	var iface: Node = players.GetLocalInterface()
 	if iface == null:
-		return
+		return false
 
 	var added: bool = false
 	if iface.AutoStack(pickup.slotData, iface.inventoryGrid):
@@ -108,7 +168,7 @@ func RequestPickup(uuid: int) -> void:
 	if not added:
 		if iface.has_method("PlayError"):
 			iface.PlayError()
-		return
+		return false
 
 	iface.UpdateStats(false)
 	if pickup.has_method("PlayPickup"):
@@ -121,12 +181,79 @@ func RequestPickup(uuid: int) -> void:
 		BroadcastPickupRemove.rpc(uuid)
 	else:
 		SubmitPickupRemove.rpc_id(1, uuid)
+	return true
+
+
+func _pickup_denied_feedback() -> void:
+	var players := _players()
+	var iface: Node = players.GetLocalInterface() if players else null
+	if iface and iface.has_method("PlayError"):
+		iface.PlayError()
+
+
+@rpc("any_peer", "reliable", "call_remote")
+func RequestPickupClaim(uuid: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	var players := _players()
+	if players == null or not players.worldItems.has(uuid) 			or not is_instance_valid(players.worldItems[uuid]):
+		DenyPickup.rpc_id(sender, uuid)
+		return
+	if _pickup_claims.has(uuid) and int(_pickup_claims[uuid]["peer"]) != sender:
+		DenyPickup.rpc_id(sender, uuid)
+		return
+	_pickup_claims[uuid] = {"peer": sender, "t": PICKUP_CLAIM_TIMEOUT}
+	GrantPickup.rpc_id(sender, uuid)
+
+
+@rpc("authority", "reliable", "call_remote")
+func GrantPickup(uuid: int) -> void:
+	_awaiting_grant.erase(uuid)
+	if not _take_pickup(uuid):
+		# Full inventory, or the item went away between asking and answering.
+		# Without this the item stays locked until the claim times out.
+		ReleasePickupClaim.rpc_id(1, uuid)
+
+
+@rpc("authority", "reliable", "call_remote")
+func DenyPickup(uuid: int) -> void:
+	_awaiting_grant.erase(uuid)
+	_pickup_denied_feedback()
+
+
+@rpc("any_peer", "reliable", "call_remote")
+func ReleasePickupClaim(uuid: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if _pickup_claims.has(uuid) and int(_pickup_claims[uuid]["peer"]) == sender:
+		_pickup_claims.erase(uuid)
+
+
+## A peer that disconnects mid-pickup must not leave the item locked.
+func release_claims_for_peer(peer_id: int) -> void:
+	for uuid in _pickup_claims.keys():
+		if int(_pickup_claims[uuid]["peer"]) == peer_id:
+			_pickup_claims.erase(uuid)
+
+
+func reset_scene_state() -> void:
+	_pickup_claims.clear()
+	_awaiting_grant.clear()
+	_pickup_targets.clear()
+
+
+func _log(msg: String) -> void:
+	var l = Engine.get_meta("CoopLogger", null)
+	if l: l.log_msg("PickupSync", msg)
 
 
 @rpc("any_peer", "reliable", "call_remote")
 func SubmitPickupRemove(uuid: int) -> void:
 	if not multiplayer.is_server():
 		return
+	_pickup_claims.erase(uuid)
 	BroadcastPickupRemove.rpc(uuid)
 
 

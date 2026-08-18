@@ -319,6 +319,9 @@ func _on_peer_left(peer_id: int) -> void:
 		var cs: Node = coop.get_sync("container") if coop else null
 		if cs and cs.has_method("release_holders_for_peer"):
 			cs.release_holders_for_peer(peer_id)
+		var ps: Node = coop.get_sync("pickup") if coop else null
+		if ps and ps.has_method("release_claims_for_peer"):
+			ps.release_claims_for_peer(peer_id)
 		var es: Node = coop.get_sync("event") if coop else null
 		if es and "_sleep_ready" in es and es._sleep_ready.has(peer_id):
 			es._sleep_ready.erase(peer_id)

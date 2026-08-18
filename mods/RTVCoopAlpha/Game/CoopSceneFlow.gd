@@ -143,6 +143,9 @@ func ScanIfNeeded(_delta: float) -> void:
 	var container_sync: Node = coop.get_sync("container") if coop else null
 	if container_sync and container_sync.has_method("reset_scene_state"):
 		container_sync.reset_scene_state()
+	var pickup_sync: Node = coop.get_sync("pickup") if coop else null
+	if pickup_sync and pickup_sync.has_method("reset_scene_state"):
+		pickup_sync.reset_scene_state()
 
 	lastKnownMap = current_map
 	if current_map == null:
