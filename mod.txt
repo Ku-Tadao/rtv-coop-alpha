@@ -1,7 +1,7 @@
 [mod]
 name="RTV Coop Alpha"
 id="rtv-coop-alpha"
-version="1.1.5"
+version="1.1.4"
 priority=10
 
 [updates]

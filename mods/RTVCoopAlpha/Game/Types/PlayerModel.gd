@@ -392,8 +392,6 @@ func SwapWeapon(file: String) -> bool:
 var _current_attachments: Array = []
 var _current_flashlight: bool = false
 var _spine_bone: int = -1
-var _neck_bone: int = -1
-var _head_bone: int = -1
 var _spine_pitch: float = 0.0
 var _spine_target: float = 0.0
 
@@ -409,23 +407,10 @@ func _process(delta: float) -> void:
         return
     if _spine_bone < 0:
         _spine_bone = aiInstance.spineData.bone if aiInstance.spineData else 12
-        _neck_bone = skel.find_bone("Neck")
-        _head_bone = skel.find_bone("Head")
     _spine_pitch = lerp(_spine_pitch, _spine_target, clampf(10.0 * delta, 0.0, 1.0))
-    _coop_pitch_bone(skel, _spine_bone, spine_share)
-    # Remainder to the head, weighted toward the neck so the bend is not all in
-    # one joint. These carry no arm children, so the weapon stays where it is.
-    var rest: float = maxf(0.0, 1.0 - spine_share)
-    _coop_pitch_bone(skel, _neck_bone, rest * 0.6)
-    _coop_pitch_bone(skel, _head_bone, rest * 0.4)
-
-
-func _coop_pitch_bone(skel: Skeleton3D, bone: int, share: float) -> void:
-    if bone < 0 or is_zero_approx(share):
-        return
-    var pose: Transform3D = skel.get_bone_global_pose_no_override(bone)
-    pose.basis = pose.basis.rotated(pose.basis.x, -_spine_pitch * share)
-    skel.set_bone_global_pose_override(bone, pose, 1.0, true)
+    var bonePose: Transform3D = skel.get_bone_global_pose_no_override(_spine_bone)
+    bonePose.basis = bonePose.basis.rotated(bonePose.basis.x, -_spine_pitch * spine_share)
+    skel.set_bone_global_pose_override(_spine_bone, bonePose, 1.0, true)
 
 
 func _apply_puppet_attachments(attachmentFiles: Array):
@@ -511,11 +496,7 @@ func _apply_puppet_backpack(file: String):
 # to the neck/head. F6 lowers the share, F7 raises it, F8 reports.
 static var spine_pitch_min: float = -1.60
 const SPINE_PITCH_MAX := 1.2
-# Bone 12 is Spine_04, and both shoulders are its children -- so putting the
-# whole look-pitch there rotates the arms with the torso and folds the weapon
-# into the body. Neck and Head are siblings of the shoulders, so pitch applied
-# there moves the head alone. Most of it belongs on those two.
-static var spine_share: float = 0.25
+static var spine_share: float = 0.7
 const SPINE_TUNE_STEP := 0.05
 
 static var _deepest_raw: float = 0.0
