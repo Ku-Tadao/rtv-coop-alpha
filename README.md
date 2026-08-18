@@ -111,6 +111,7 @@ docs/                       architecture, hooks, building
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains the boot sequence,
 authority model, and how a remote player is actually drawn.
 [docs/HOOKS.md](docs/HOOKS.md) lists every vanilla script the mod touches.
+[docs/HANDOFF.md](docs/HANDOFF.md) is the current state of play — start there.
 
 ---
 
