@@ -81,6 +81,26 @@ func _rebuild_cid_cache() -> void:
 			node = node.get_parent()
 
 
+## Claim an id for the node the host named. Paths are identical across peers for
+## anything the scene itself loaded, which is the same assumption door sync has
+## always relied on -- and unlike a position match it is exact, so it cannot
+## silently attach an id to the wrong container.
+func _adopt_container_id(node_path: String, cid: int) -> Node:
+	var node: Node = get_node_or_null(node_path)
+	if node == null or not (node is LootContainer):
+		_log("  → path did not resolve to a LootContainer: %s" % node_path)
+		return null
+	var existing: int = _node_id(node)
+	if existing > 0 and existing != cid:
+		_log("  → refusing to renumber %s from %d to %d" % [node_path, existing, cid])
+		return null
+	node.set_meta("coop_container_id", cid)
+	if not node.is_in_group("CoopLootContainer"):
+		node.add_to_group("CoopLootContainer")
+	_cid_cache[cid] = node
+	return node
+
+
 ## Called on map change: every cached node belongs to the scene being torn down.
 func reset_scene_state() -> void:
 	_container_holders.clear()
@@ -134,13 +154,19 @@ func BroadcastContainerStorage(cid: int, serialized: Array) -> void:
 
 
 @rpc("authority", "reliable", "call_remote")
-func BroadcastContainerFullState(cid: int, pos: Vector3, loot_arr: Array, storage_arr: Array, storaged_flag: bool) -> void:
-	_log("BroadcastContainerFullState RECEIVED cid=%d pos=%s loot=%d storage=%d" % [cid, str(pos), loot_arr.size(), storage_arr.size()])
-	# No position-based fallback: guessing the node by proximity assigns an id the host never
-	# gave it, which then shadows the node that legitimately owns that id.
+func BroadcastContainerFullState(cid: int, pos: Vector3, loot_arr: Array, storage_arr: Array, storaged_flag: bool, node_path: String = "") -> void:
+	_log("BroadcastContainerFullState RECEIVED cid=%d pos=%s loot=%d storage=%d path=%s" % [cid, str(pos), loot_arr.size(), storage_arr.size(), node_path])
+	# Containers numbered by an RPC (AI corpses, death stashes, furniture) already
+	# carry the id on every peer. Scene containers are numbered by the host alone,
+	# so the guest needs telling which of its nodes owns this id.
 	var container := _find_container_by_id(cid)
+	if container == null and node_path != "":
+		container = _adopt_container_id(node_path, cid)
 	if container == null:
-		_log("  → container NOT FOUND for cid=%d" % cid)
+		# Deliberately no position fallback. Guessing by proximity assigns an id
+		# the host never gave, which then shadows the node that legitimately owns
+		# it -- that is what made a Locker open a Nightstand.
+		_log("  → container NOT FOUND for cid=%d (path=%s)" % [cid, node_path])
 		return
 	var ss := _slot_serializer()
 	if ss == null:

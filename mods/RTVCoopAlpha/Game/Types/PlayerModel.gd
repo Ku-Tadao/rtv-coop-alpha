@@ -156,12 +156,10 @@ func _pick_animation(state: Dictionary) -> String:
     var condition: String = state.get("animCondition", "Group")
     var blend: float = state.get("animBlend", 1.0)
 
-    # The rig ships no unarmed locomotion at all -- Trader is the only clip with
-    # empty hands, and it is a standing pose. Anything other than standing still
-    # will show a carry pose no matter what we pick.
-    if not state.get("hasWeapon", true):
-        return "Trader"
-
+    # No unarmed branch, deliberately. Trader is the rig's only empty-handed
+    # clip and it is a standing pose, so an unarmed player who moves reads worse
+    # with it than without. 1.0.0 fell through to the rifle carry and that is
+    # what it should look like -- an empty assault rifle, not a shopkeeper.
     match condition:
         "Group":
             # A lowered weapon is the Guard pose. Without this, a lowered weapon

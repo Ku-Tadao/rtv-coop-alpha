@@ -85,3 +85,82 @@ class TestResolutionSemantics(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestGuestsLearnSceneContainerIds(unittest.TestCase):
+    """Only the host numbers scene containers, so the guest has to be told which
+    of its own nodes owns each id.
+
+    Removing the proximity fallback fixed a Locker opening a Nightstand and, in
+    the same stroke, deleted the only way a guest ever learned a scene
+    container's id at all -- so guests could open corpses and death stashes
+    (numbered by an RPC on every peer) and nothing that loaded with the map.
+    """
+
+    def test_the_host_sends_the_node_path(self):
+        body = func(read("Game/CoopSceneFlow.gd"), "_broadcast_container_storage_to")
+        self.assertIn("str(root.get_path())", body)
+        self.assertIn("node_path", body)
+
+    def test_the_guest_adopts_the_id_from_the_path(self):
+        body = func(read("Game/Sync/ContainerSync.gd"), "BroadcastContainerFullState")
+        self.assertIn("_adopt_container_id(node_path, cid)", body)
+
+    def test_adoption_is_exact_not_a_guess(self):
+        body = func(read("Game/Sync/ContainerSync.gd"), "_adopt_container_id")
+        self.assertIn("get_node_or_null(node_path)", body)
+        self.assertIn("node is LootContainer", body)
+        # A node that already owns a different id must not be renumbered --
+        # that is how two nodes came to answer to one id in the first place.
+        self.assertIn("existing != cid", body)
+
+    def test_the_position_fallback_stays_gone(self):
+        src = read("Game/Sync/ContainerSync.gd")
+        self.assertNotIn("_find_container_near", src)
+
+    def test_adoption_populates_the_lookup_cache(self):
+        # Otherwise the node is not findable until the cache next rebuilds.
+        body = func(read("Game/Sync/ContainerSync.gd"), "_adopt_container_id")
+        self.assertIn("_cid_cache[cid] = node", body)
+
+
+class TestTraderDressingIsNotTakeable(unittest.TestCase):
+    """A guest could take trader display items the host could not.
+
+    RegisterSceneItems runs a second after the map loads, and dressing that is
+    not parented under the trader yet gets numbered and broadcast. The host's
+    interact goes through InteractorHooks, which asks about trader ownership
+    before it asks about the uuid, so the host never noticed. The Pickup.Interact
+    path only asked about the uuid.
+    """
+
+    def test_both_interact_paths_check_trader_ownership(self):
+        for rel, name in [
+            ("Game/Hooks/InteractorHooks.gd", "_replace_interactor_interact"),
+            ("Game/Hooks/LootHooks.gd", "_replace_pickup_interact"),
+        ]:
+            body = func(read(rel), name)
+            self.assertIn("_is_trader_display_item", body, rel)
+
+    def test_ownership_is_checked_before_the_uuid(self):
+        body = func(read("Game/Hooks/LootHooks.gd"), "_replace_pickup_interact")
+        self.assertLess(
+            body.index("_is_trader_display_item"),
+            body.index('get_meta("network_uuid"'),
+            "a numbered trader item would slip through",
+        )
+
+    def test_a_late_adoption_drops_the_id_again(self):
+        body = func(read("Game/CoopSceneFlow.gd"), "RegisterSceneItems")
+        self.assertIn("remove_meta(\"network_uuid\")", body)
+        self.assertIn("worldItems.erase", body)
+
+
+class TestUnarmedPoseMatches100(unittest.TestCase):
+    def test_no_unarmed_special_case(self):
+        # 1.0.0 fell through to the rifle carry -- an empty assault rifle. Trader
+        # is the rig's only empty-handed clip and it is a standing pose, so it
+        # reads worse the moment the player moves.
+        body = func(read("Game/Types/PlayerModel.gd"), "_pick_animation")
+        self.assertNotIn('return "Trader"', body)
+        self.assertNotIn('hasWeapon', body)

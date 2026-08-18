@@ -203,9 +203,15 @@ func RegisterSceneItems() -> void:
 	for item in items:
 		if not (item is Pickup):
 			continue
-		if item.has_meta("network_uuid"):
-			continue
 		if _players._is_trader_display_item(item):
+			# Also drop an id assigned before the trader adopted this item: the
+			# first scan runs one second after the map loads and can catch
+			# dressing that is not parented yet.
+			if item.has_meta("network_uuid"):
+				_players.worldItems.erase(int(item.get_meta("network_uuid")))
+				item.remove_meta("network_uuid")
+			continue
+		if item.has_meta("network_uuid"):
 			continue
 		item.set_meta("network_uuid", _players.nextUuid)
 		_players.worldItems[_players.nextUuid] = item
@@ -607,10 +613,14 @@ func _broadcast_container_storage_to(peer_id: int) -> void:
 		var cid: int = cs._node_id(root)
 		if cid <= 0:
 			continue
+		# The path is how a guest learns which of its own nodes owns this id.
+		# Only the host numbers scene containers, so without it the guest's
+		# containers have no id at all and it can open none of them.
+		var node_path: String = str(root.get_path())
 		if peer_id == 0:
-			cs.BroadcastContainerFullState.rpc(cid, root.global_position, loot_arr, storage_arr, root.storaged)
+			cs.BroadcastContainerFullState.rpc(cid, root.global_position, loot_arr, storage_arr, root.storaged, node_path)
 		else:
-			cs.BroadcastContainerFullState.rpc_id(peer_id, cid, root.global_position, loot_arr, storage_arr, root.storaged)
+			cs.BroadcastContainerFullState.rpc_id(peer_id, cid, root.global_position, loot_arr, storage_arr, root.storaged, node_path)
 
 
 @rpc("authority", "reliable", "call_remote")

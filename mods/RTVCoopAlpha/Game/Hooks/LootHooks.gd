@@ -126,6 +126,17 @@ func _replace_pickup_interact() -> void:
 	var pu := CoopHook.caller()
 	if pu == null or not CoopAuthority.is_active():
 		return
+	# Trader dressing can carry a uuid: RegisterSceneItems runs a second after the
+	# map loads, and anything not yet parented under the trader at that moment
+	# gets numbered and broadcast. The host never notices, because its interact
+	# goes through InteractorHooks, which checks trader ownership before the uuid.
+	# This path only checked the uuid, so a guest could take what the host could
+	# not. Ownership is the question, not whether the item happens to be numbered.
+	if players and players._is_trader_display_item(pu):
+		if pu.get("interface") and pu.interface.has_method("PlayError"):
+			pu.interface.PlayError()
+		CoopHook.skip_super()
+		return
 	var uuid: int = int(pu.get_meta("network_uuid", -1))
 	if uuid < 0:
 		if pu.get("interface") and pu.interface.has_method("PlayError"):
