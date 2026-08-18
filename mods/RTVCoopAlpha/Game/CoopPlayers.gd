@@ -558,6 +558,11 @@ func GetMap() -> Node:
 	return _scene_flow.GetMap() if _scene_flow else null
 
 
+func BroadcastSceneChangeStart(scene_name: String) -> void:
+	if _scene_flow:
+		_scene_flow.BroadcastSceneChangeStart(scene_name)
+
+
 func RegisterSceneItems() -> void:
 	if _scene_flow:
 		_scene_flow.RegisterSceneItems()

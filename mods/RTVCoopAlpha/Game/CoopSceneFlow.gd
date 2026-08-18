@@ -47,6 +47,9 @@ func _physics_process(delta: float) -> void:
 			if cur_name != pendingSceneChange:
 				_players.SaveClientCharacterBuffer()
 				Loader.LoadScene(pendingSceneChange)
+			else:
+				_freeze_for_transition(false)
+				Loader.FadeOut()
 			pendingSceneChange = ""
 			pendingSceneTimer = 0.0
 
@@ -261,6 +264,43 @@ func ApplySceneChange(scene_name: String) -> void:
 	pendingSceneTimer = 0.0
 
 
+## Freeze guests when the host *starts* loading, not when it finishes.
+##
+## Guests used to learn about a transition only from HostSceneReady, which fires
+## after the host's own load plus HOST_READY_BROADCAST_DELAY -- five or six
+## seconds of free play in a world whose authority has already left. Anything
+## looted in that window is written into a scene the host is no longer
+## simulating, so the item is still sitting there when someone walks back to it.
+## The actual LoadScene still waits for HostSceneReady (that is what carries the
+## spawn position and the session seed); this only takes the player's hands off
+## the controls at the right moment.
+@rpc("authority", "reliable", "call_remote")
+func BeginSceneChange(scene_name: String) -> void:
+	if _players == null or scene_name == "":
+		return
+	pendingSceneChange = scene_name
+	pendingSceneTimer = 0.0
+	_freeze_for_transition(true)
+	_players.SaveClientCharacterBuffer()
+	Loader.FadeIn()
+
+
+func _freeze_for_transition(on: bool) -> void:
+	if _players == null or _players.gameData == null:
+		return
+	_players.gameData.isTransitioning = on
+	_players.gameData.freeze = on
+
+
+## Called on the host from LoaderHooks the moment vanilla begins a scene load.
+func BroadcastSceneChangeStart(scene_name: String) -> void:
+	if not CoopAuthority.is_active() or not multiplayer.is_server():
+		return
+	if scene_name == "" or scene_name == "Menu":
+		return
+	BeginSceneChange.rpc(scene_name)
+
+
 @rpc("authority", "reliable", "call_remote")
 func HostSceneReady(scene_name: String = "", host_pos: Vector3 = Vector3.ZERO, scene_seed: int = 0) -> void:
 	if _players == null:
@@ -277,11 +317,13 @@ func HostSceneReady(scene_name: String = "", host_pos: Vector3 = Vector3.ZERO, s
 		pendingSceneTimer = 0.0
 		if host_pos != Vector3.ZERO:
 			ApplyClientSpawn(host_pos)
+		_freeze_for_transition(false)
+		Loader.FadeOut()
 		return
 	if host_pos != Vector3.ZERO:
 		pendingSpawnPosition = host_pos
 	_players.SaveClientCharacterBuffer()
-	_players.gameData.isTransitioning = true
+	_freeze_for_transition(true)
 	Loader.LoadScene(target)
 	pendingSceneChange = ""
 	pendingSceneTimer = 0.0

@@ -70,7 +70,7 @@ func _report(path: String) -> void:
 	print(path)
 	print("=".repeat(70))
 
-	var packed := load(path) as PackedScene
+	var packed: PackedScene = load(path) as PackedScene
 	if packed == null:
 		print("  not a PackedScene\n")
 		return
@@ -86,7 +86,7 @@ func _report(path: String) -> void:
 			var clips: PackedStringArray = node.get_animation_list()
 			print("\nAnimationPlayer %s -- %d clip(s)" % [node.name, clips.size()])
 			for clip in clips:
-				var anim := node.get_animation(clip)
+				var anim: Animation = node.get_animation(clip)
 				print("  %-28s %6.2fs loop=%s tracks=%d" % [
 					clip, anim.length, anim.loop_mode != Animation.LOOP_NONE, anim.get_track_count()])
 		elif node is AnimationTree:
@@ -109,7 +109,7 @@ func _report_skeleton(skel: Skeleton3D) -> void:
 ## blend point is what says whether directional locomotion exists at all.
 func _report_tree(tree: AnimationTree) -> void:
 	print("\nAnimationTree %s" % tree.name)
-	var root_node := tree.tree_root
+	var root_node: AnimationNode = tree.tree_root
 	if root_node == null:
 		print("  no tree_root")
 		return
@@ -122,7 +122,7 @@ func _describe_node(node: AnimationNode, prefix: String) -> void:
 
 	if node is AnimationNodeBlendSpace1D:
 		for i in node.get_blend_point_count():
-			var point := node.get_blend_point_node(i)
+			var point: AnimationNode = node.get_blend_point_node(i)
 			print("  %s  [%.2f] %s" % [
 				prefix, node.get_blend_point_position(i), _animation_of(point)])
 		return

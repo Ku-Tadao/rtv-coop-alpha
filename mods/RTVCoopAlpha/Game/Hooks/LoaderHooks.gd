@@ -30,6 +30,11 @@ func _on_loadscene_pre(scene_name: String = "") -> void:
 		if net:
 			net.Disconnect()
 		return
+	# Tell guests now, before the host's own load blocks the main thread. Waiting
+	# for HostSceneReady leaves them playing for seconds in a scene the host has
+	# already left, and loot taken there is lost on the host's side.
+	if CoopAuthority.is_host() and players:
+		players.BroadcastSceneChangeStart(scene_name)
 	var session: int = players.coop_session_seed if players and "coop_session_seed" in players else 0
 	if session == 0:
 		if CoopAuthority.is_host() and players and players.has_method("_ensure_session_seed"):
