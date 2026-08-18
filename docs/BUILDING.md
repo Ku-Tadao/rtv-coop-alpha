@@ -148,8 +148,13 @@ stderr, which the game's log file does not capture, and the final buffered write
 is lost. **Nothing in the logs will name that crash.** Do not spend time reading
 them for a cause that is not there — bisect instead.
 
-Because the whole mod is data in a zip, a bisect build is cheap: take the known
-good archive and swap in one changed file.
+The ladder for the current investigation is already scripted --
+`python tools/mkbisect.py` writes arms 0/A/B/C to `dist/bisect/`, and
+`tests/test_bisect.py` checks each arm is the one below it plus exactly one
+suspect. See [CRASH-BISECT.md](CRASH-BISECT.md) for what each arm answers.
+
+For a new bisect: because the whole mod is data in a zip, an arm is cheap --
+take the known good archive and swap in one changed file.
 
 ```python
 import zipfile

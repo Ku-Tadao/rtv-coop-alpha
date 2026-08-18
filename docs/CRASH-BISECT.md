@@ -82,26 +82,42 @@ confirmed working.
 
 ## Bisect arms
 
-Both built from pristine `1.0.0`, everything else byte-identical, and both
-carrying the container-id fix (constant across arms, so it cannot skew the
-result):
+Built by `python tools/mkbisect.py` into `dist/bisect/`. Every arm is the
+current `dev` tree; arms differ *only* in which suspect script is taken from the
+crashing v4 build instead (`tools/bisect/v4/`, kept in-repo so the ladder is
+reproducible without the original scratch builds).
 
-| Arm | Contents |
-|---|---|
-| **A** | `1.0.0` + `LocalStateSync.gd` + container fix |
-| **B** | A + `PlayerStateProxy.gd` |
-| — | A + B + `PlayerModel.gd` is the v3 build, which **crashes** |
+| Arm | Contents | Question it answers |
+|---|---|---|
+| **0** | `dev`, no suspects | is our own fixed base clean? |
+| **A** | 0 + `LocalStateSync.gd` | |
+| **B** | A + `PlayerStateProxy.gd` | |
+| **C** | B + `PlayerModel.gd` | equals the v4-era build, known to crash over Steam |
 
-Run A first, on every peer, for a session with shooting and AI.
+The base is `dev` rather than `1.0.0` because the earlier `1.0.0`-based arms
+carried four live bugs into every test session, one of them continuously
+corrupting the host's weapon state. The cost of the swap is the control:
+"`1.0.0` does not crash" is backed by months of play, and `dev` has no such
+record. **Arm 0 is the replacement control and must be established first** --
+without it a crash on any arm above could be ours rather than the original's.
+
+Arm C is the positive control. If the build that demonstrably crashed over Steam
+survives locally over ENet, that is strong evidence the transport is the cause
+and all three scripts are innocent.
+
+Run each arm on every peer, for a session with shooting and AI.
 
 | Result | Conclusion |
 |---|---|
+| 0 crashes | the crash is in our own fixes -- stop the ladder |
+| 0 clean, A crashes | `LocalStateSync.gd` |
 | A clean, B crashes | `PlayerStateProxy.gd` |
-| A and B both clean | `PlayerModel.gd` |
-| A crashes | `LocalStateSync.gd`, or the container fix — rebuild A without the container fix to separate them |
+| B clean, C crashes | `PlayerModel.gd` |
+| all four clean | nothing here reproduces over ENet; suspect `SteamMultiplayerPeer` |
 
-Both arms deliberately give up the shooting fixes; that is the point of the
-split. Neither should be merged as-is.
+Remember the asymmetry: an arm that **crashes** locally is conclusive, an arm
+that stays **clean** clears nothing, because local runs use ENet and the crash
+was seen over `SteamMultiplayerPeer`.
 
 ## Dead ends already tried
 

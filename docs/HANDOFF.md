@@ -241,54 +241,33 @@ Full detail in [BUILDING.md](BUILDING.md#testing-two-instances-on-one-pc).
 
 ---
 
-## 5. Where the bisect stands, and the decision to make
+## 5. Where the bisect stands
 
-Two arms are built in `editable-mods/RTVCoopAlpha/build/`, both from pristine
-1.0.0 plus the shared fixes, differing **only** in the suspect file:
+The decision in §5 of the previous handoff is taken: **the ladder is built from
+`dev`, and arm 0 is the control.**
 
-- **arm A** = 1.0.0 + `LocalStateSync.gd` + container fix + guest-save fix
-- **arm B** = arm A + `PlayerStateProxy.gd`
-
-Arm A is installed and survived one firefight.
-
-### The choice
-
-Continuing on the frozen base keeps the cleanest experiment, but means playing
-with the duplicate-gun, phantom-gunshot and session-teardown bugs still present,
-since those fixes are on `dev` and deliberately not in the arms.
-
-Rolling `dev` into the arms **changes the shape of the experiment**, which is
-worth being explicit about: today the control is "1.0.0 does not crash",
-established by months of the friend playing it. If the base becomes `dev`, that
-control no longer applies — `dev` carries eight commits nobody has stress-tested,
-so a crash on any arm could be ours rather than the original.
-
-The way to have both is to add a rung at the bottom:
+```
+python tools/mkbisect.py        # -> dist/bisect/RTVCoopAlpha-arm{0,A,B,C}.vmz
+```
 
 | Arm | Contents | Question it answers |
 |---|---|---|
-| **0** | `dev`, no sync suspects | Is our own fixed base clean? |
+| **0** | `dev`, no suspects | is our own fixed base clean? |
 | **A** | 0 + `LocalStateSync.gd` | |
 | **B** | A + `PlayerStateProxy.gd` | |
 | **C** | B + `PlayerModel.gd` | equals the v4-era build, known to crash |
 
-Arm 0 is the new control and must be established first — without it the ladder
-proves nothing. Arm C is the positive control: if it *doesn't* crash locally,
-that is strong evidence the transport is the real cause, because it is the build
-that demonstrably crashed over Steam.
+The suspect versions live in `tools/bisect/v4/`, so the ladder no longer depends
+on scratch builds that were only ever in a temp directory. `tests/test_bisect.py`
+asserts each arm is the one below it plus exactly one suspect -- the property a
+stale source path silently broke last time.
 
-**Recommendation: build the ladder from `dev`, run arm 0 first.** The banked arm A
-result is one fight, which is weak evidence to protect, and `dev` fixes four
-things that otherwise degrade every test session — including one continuously
-corrupting the host's weapon state.
+**Arm 0 is installed** (`.../Road to Vostok/mods/RTVCoopAlpha-arm0.vmz`); the
+earlier `1.0.0`-based arm A is removed. The banked "arm A survived one firefight"
+result is superseded -- it was one fight on a different base.
 
-The arms are produced by a script in the session scratchpad (`mkbisect.py`): it
-copies the pristine archive entry-for-entry, substituting named members from the
-repo tree, and asserts no file mixes tab and space indentation. Rebuilding it
-from that description is a ten-minute job; the important part is the rules in
-§6.
-
----
+Next: play arm 0 with two instances, shooting and AI, on both peers. If it holds,
+move up to A. Keep in mind the asymmetry from §2 -- clean clears nothing.
 
 ## 6. Traps this session actually hit
 
