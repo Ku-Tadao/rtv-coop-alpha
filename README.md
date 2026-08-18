@@ -132,6 +132,12 @@ These are reproduced and understood, and are what the `dev` branch is for.
   load. Fixed on `dev`.
 - Aiming can stay blocked after sprinting, because the AI hook borrows the
   shared `GameData` movement flags and does not always restore them.
+- **AI weapons could be picked up twice by a guest.** Clients grow AI pools
+  locally, so a paused pooled agent's weapon exists only on the guest and has no
+  host-assigned uuid. The interact hook fell through to the vanilla pickup for
+  unnumbered items, minting a copy the host never saw — then the same gun
+  dropped again from the corpse. Trader display weapons were takeable the same
+  way. Fixed on `dev`; guests now refuse anything the host has not numbered.
 - **A guest's own save could be overwritten by the host's world.** The save
   hooks guarded on `is_client()`, which goes false the instant the transport
   drops — while the guest is still standing in the host's cabin. Nothing sent

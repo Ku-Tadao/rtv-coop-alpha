@@ -122,6 +122,15 @@ func _replace_interactor_interact() -> void:
 				players.RequestPickup(uuid)
 			CoopHook.skip_super()
 			return
+		# No host-assigned uuid means this is not part of the shared world: an AI's
+		# carried weapon, trader dressing, or something the host has not registered
+		# yet. Falling through would run the vanilla pickup locally and mint a copy
+		# the host never hears about -- the same item then drops again from the
+		# corpse. A guest may only take what the host has numbered.
+		if CoopAuthority.is_client():
+			gd.interaction = false
+			CoopHook.skip_super()
+			return
 
 	if gd.decor and interactor.target.is_in_group("Furniture"):
 		var coop_fid: int = -1
