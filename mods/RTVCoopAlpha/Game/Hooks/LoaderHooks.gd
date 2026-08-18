@@ -22,6 +22,14 @@ var _scene_visit_counter: int = 0
 func _on_loadscene_pre(scene_name: String = "") -> void:
 	if not CoopAuthority.is_active():
 		return
+	# Leaving for the menu ends the session. Without this the peer survives the
+	# scene change and guests keep playing in a world whose authority has walked
+	# away -- the host is sitting in the main menu and no longer simulating it.
+	if scene_name == "Menu" and CoopAuthority.is_host():
+		_log("LoadScene PRE: host returning to menu, ending session")
+		if net:
+			net.Disconnect()
+		return
 	var session: int = players.coop_session_seed if players and "coop_session_seed" in players else 0
 	if session == 0:
 		if CoopAuthority.is_host() and players and players.has_method("_ensure_session_seed"):

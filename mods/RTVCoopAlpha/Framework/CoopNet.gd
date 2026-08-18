@@ -40,9 +40,17 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
+	Disconnect()
 	var coop := RTVCoop.get_instance()
 	if coop and coop.net == self:
 		coop.net = null
+
+
+func _notification(what: int) -> void:
+	# PEER_TIMEOUT_MS is 90s, so an ungraceful exit leaves everyone else staring
+	# at a frozen world for a minute and a half. Hang up on the way out instead.
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_CRASH:
+		Disconnect()
 
 
 func _ready() -> void:

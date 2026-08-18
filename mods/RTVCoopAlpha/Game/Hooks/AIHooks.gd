@@ -9,10 +9,13 @@ const COOP_DOOR_OPEN_RANGE: float = 40.0
 const _COOP_RETARGET_INTERVAL: float = 0.25
 
 func _setup_hooks() -> void:
-	CoopHook.register_replace_or_post(self,
-		"ai-_physics_process",
-		_replace_ai_physics_process,
-		_post_ai_physics_process)
+	# Two explicit registrations, not register_replace_or_post: that claims the
+	# replace slot and only registers the post callback if replace was already
+	# taken. The restore below must run on every tick, or the borrowed GameData
+	# flags stay set -- the host's own weapon fires when a guest pulls the
+	# trigger, and aim stays blocked after a guest sprints.
+	CoopHook.register(self, "ai-_physics_process", _replace_ai_physics_process)
+	CoopHook.register(self, "ai-_physics_process-post", _post_ai_physics_process)
 	CoopHook.register_replace_or_post(self,
 		"ai-death",
 		_replace_ai_death,

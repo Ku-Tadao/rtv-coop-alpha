@@ -130,8 +130,15 @@ These are reproduced and understood, and are what the `dev` branch is for.
 - **First shelter furniture never syncs.** The furniture id counter starts at 0
   while 0 is the "no id" sentinel, so the first item is skipped on every map
   load. Fixed on `dev`.
-- Aiming can stay blocked after sprinting, because the AI hook borrows the
-  shared `GameData` movement flags and does not always restore them.
+- **The host's own weapon fired when a guest pulled the trigger**, and aim
+  could stay blocked after a guest sprinted. The AI hook borrows the shared
+  `GameData` flags each tick and restored them from a callback registered via
+  `register_replace_or_post`, which only registers the restore if the replace
+  slot was already taken — so it never ran. Fixed on `dev`.
+- **Only F11 ended a session.** Returning to the main menu left the peer alive,
+  because `CoopNet` sits outside the scene tree — guests kept playing in a world
+  the host had stopped simulating. Quitting left them on a 90-second peer
+  timeout. Fixed on `dev`.
 - **AI weapons could be picked up twice by a guest.** Clients grow AI pools
   locally, so a paused pooled agent's weapon exists only on the guest and has no
   host-assigned uuid. The interact hook fell through to the vanilla pickup for
