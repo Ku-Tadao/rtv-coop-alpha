@@ -65,3 +65,55 @@ class TestArchive(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestContentDigest(unittest.TestCase):
+    """Byte-identical archives were promised and are not achievable across
+    platforms -- zlib differs, so CI's deflate output differs from Windows' for
+    identical input. The digest is the promise that can actually be kept."""
+
+    def test_a_built_archive_matches_the_source_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = build.build(Path(tmp) / "t.vmz")
+            self.assertEqual(build.content_digest(out), build.content_digest())
+
+    def test_it_ignores_how_the_archive_was_packed(self):
+        # Repack with different compression and timestamps: same contents, so
+        # the same digest. This is exactly the CI-vs-local case.
+        with tempfile.TemporaryDirectory() as tmp:
+            original = build.build(Path(tmp) / "a.vmz")
+            repacked = Path(tmp) / "b.vmz"
+            with zipfile.ZipFile(original) as zin, \
+                    zipfile.ZipFile(repacked, "w", zipfile.ZIP_STORED) as zout:
+                for name in zin.namelist():
+                    info = zipfile.ZipInfo(name, (2001, 2, 3, 4, 5, 6))
+                    info.create_system = 3
+                    zout.writestr(info, zin.read(name))
+            self.assertNotEqual(original.read_bytes(), repacked.read_bytes())
+            self.assertEqual(
+                build.content_digest(original), build.content_digest(repacked)
+            )
+
+    def test_changing_one_byte_of_content_changes_the_digest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            original = build.build(Path(tmp) / "a.vmz")
+            tampered = Path(tmp) / "b.vmz"
+            with zipfile.ZipFile(original) as zin, \
+                    zipfile.ZipFile(tampered, "w") as zout:
+                for name in zin.namelist():
+                    data = zin.read(name)
+                    if name.endswith("Main.gd"):
+                        data += b"\n# tampered\n"
+                    zout.writestr(name, data)
+            self.assertNotEqual(
+                build.content_digest(original), build.content_digest(tampered)
+            )
+
+    def test_the_host_os_byte_is_pinned(self):
+        # Unpinned this records the building OS, so the same sources give
+        # different bytes on a developer machine and in CI.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = build.build(Path(tmp) / "t.vmz")
+            with zipfile.ZipFile(out) as zf:
+                for info in zf.infolist():
+                    self.assertEqual(info.create_system, 0, info.filename)

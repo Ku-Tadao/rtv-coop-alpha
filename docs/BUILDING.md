@@ -10,9 +10,32 @@ python tools/build.py --check    # validate, write nothing
 python tools/build.py --out /tmp/test.vmz
 ```
 
-Builds are reproducible: zip entry timestamps are pinned, so identical source
-produces a byte-identical archive. That makes "did this build actually change?"
-answerable with a hash instead of a guess.
+## Verifying a build
+
+Zip timestamps, permissions and the host-OS byte are pinned, so two builds on
+the *same* machine are byte-identical. Across machines they are not, and cannot
+be: zlib builds differ, so CI's deflate output differs from a Windows machine's
+for byte-identical input. An earlier version of this file claimed otherwise.
+
+What is guaranteed is the part that matters — the contents:
+
+```bash
+python tools/build.py --digest                  # the source tree
+python tools/build.py --digest some.vmz         # an archive
+```
+
+The digest covers every member's name and bytes and nothing about the packing,
+so it answers both questions worth asking: *did this build actually change?* and
+*does the published release match this source tree?* A `--digest` with no
+argument hashes the working tree, and the two agree by construction.
+
+To check a download against a tag:
+
+```bash
+git checkout v1.2.0-rc.1
+python tools/build.py --digest
+python tools/build.py --digest ~/Downloads/RTVCoopAlpha-1.2.0.vmz
+```
 
 ## What the validator enforces
 

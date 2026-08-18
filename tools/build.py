@@ -14,6 +14,7 @@ here is the validation that runs first.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import sys
 import zipfile
@@ -145,15 +146,53 @@ def build(out_path: Path) -> Path:
             info = zipfile.ZipInfo(path.relative_to(ROOT).as_posix(), FIXED_TIMESTAMP)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o644 << 16
+            # Otherwise this records the building OS (0 Windows, 3 Unix), so the
+            # same sources give different bytes on a developer machine and in CI.
+            info.create_system = 0
             archive.writestr(info, path.read_bytes())
     return out_path
+
+
+def content_digest(archive: Path | None = None) -> str:
+    """Identity of what the archive *contains*, independent of how it was packed.
+
+    Byte-identical archives were the original promise and cannot be kept: zlib
+    builds differ between platforms, so CI's deflate output differs from a
+    Windows machine's for the same input. The bytes that matter are the members,
+    and this hashes exactly those -- so "did this actually change?" and "does the
+    published release match this source tree?" both stay answerable.
+
+    With no argument, digests the working tree; the two agree by construction.
+    """
+    h = hashlib.sha256()
+    if archive is None:
+        entries = [
+            (p.relative_to(ROOT).as_posix(), p.read_bytes()) for p in source_files()
+        ]
+    else:
+        with zipfile.ZipFile(archive) as zf:
+            entries = [(n, zf.read(n)) for n in zf.namelist()]
+    for name, data in sorted(entries):
+        h.update(name.encode("utf-8"))
+        h.update(b"\0")
+        h.update(hashlib.sha256(data).digest())
+    return h.hexdigest()
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, help="output .vmz path")
     parser.add_argument("--check", action="store_true", help="validate only")
+    parser.add_argument(
+        "--digest", metavar="VMZ", type=Path, nargs="?", const=Path("-"),
+        help="print the content digest of VMZ (or of the source tree) and exit",
+    )
     args = parser.parse_args(argv)
+
+    if args.digest is not None:
+        target = None if str(args.digest) == "-" else args.digest
+        print(content_digest(target))
+        return 0
 
     try:
         problems = validate()
@@ -180,6 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     build(out)
     print(f"built {out.relative_to(ROOT) if out.is_relative_to(ROOT) else out} "
           f"({out.stat().st_size:,} bytes, {len(files)} entries)")
+    print(f"content digest {content_digest(out)}")
     return 0
 
 
