@@ -20,6 +20,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Includes tools/lint_rpc.py. The engine parse check (tools/parsecheck.py)
+      # cannot run here -- it needs Godot and the game's own pck -- so it stays a
+      # pre-release gate on a machine that has both. See docs/BUILDING.md.
       - name: Validate mod source
         run: python tools/build.py --check
 
@@ -50,6 +53,9 @@ jobs:
         with:
           files: dist/*.vmz
           generate_release_notes: true
+          # A semver pre-release tag (v1.2.0-rc.1) must not publish as the
+          # current release -- players find this page by looking for the newest.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
             Drop the `.vmz` into your Road to Vostok `mods/` folder:
 
