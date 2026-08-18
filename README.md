@@ -37,8 +37,9 @@ A **Co-op** button is injected into the main menu once the mod loads.
 - Godot 4.6 runtime (whatever the game ships)
 - Steam, for the default transport
 
-Without GodotSteam the mod falls back to ENet on `127.0.0.1:27015`, which is
-useful for testing two clients on one machine.
+The co-op menu only offers Steam lobbies. For solo testing, `CoopNet` also
+binds hidden ENet loopback keys — see
+[Testing two instances on one PC](docs/BUILDING.md#testing-two-instances-on-one-pc).
 
 ---
 

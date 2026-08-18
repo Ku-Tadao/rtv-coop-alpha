@@ -76,6 +76,70 @@ Release assets are not re-wrapped — that download is the file players drop int
    [FileScope]   MOUNTED (vmz->zip): .../mods/RTVCoopAlpha-<version>.vmz
    ```
 
+## Testing two instances on one PC
+
+You do not need a second machine or a second person. `CoopNet._input()` binds
+loopback keys that are always live, in any scene, regardless of transport:
+
+| Key | Action |
+|---|---|
+| **F9** | Host over ENet on `127.0.0.1:27015` |
+| **F10** | Join `127.0.0.1:27015` |
+| **F11** | Disconnect |
+
+`HostGameEnet()` and `JoinGame()` are unconditionally ENet, so these work even
+with GodotSteam loaded — nothing needs to be removed or rebuilt. Note the co-op
+menu itself cannot do this: `LobbyUI`'s only join path is `JoinSteam()`, driven
+by a Steam lobby callback.
+
+### Procedure
+
+1. Put the same `.vmz` in `mods/` — both instances read the same `res://`, so
+   one file covers both.
+2. Launch the first instance normally through Steam. At the main menu, press
+   **F9**. The log should show `HOSTING on port 27015`.
+3. Launch the second instance by running `RTV.exe` directly — Steam refuses to
+   start the same app twice. Steam API init will fail without a
+   `steam_appid.txt`; that is fine, ENet does not use it.
+4. At the second instance's menu, press **F10** (`JOINING 127.0.0.1:27015`).
+5. Start a game on the host. The client follows via `HostSceneReady`.
+
+### Isolate the second instance's user directory
+
+Both instances otherwise share `%APPDATA%/Road to Vostok`: the same save files
+and the same `user://coop_debug.log`, which each process opens `READ_WRITE` and
+seeks to its own end. They will overwrite each other's writes and you will lose
+the log you are trying to read.
+
+On Windows `user://` resolves under `%AppData%`, so give the second instance its
+own:
+
+```bat
+set "APPDATA=C:\rtv-client-profile" && "D:\SteamLibrary\steamapps\common\Road to Vostok\RTV.exe"
+```
+
+Verify it took effect — the mod prints its resolved log path at startup:
+
+```
+[CoopLogger] Appending to: C:/rtv-client-profile/Road to Vostok/coop_debug.log
+```
+
+If that still points at the normal profile, the redirect did not apply and the
+two logs are not trustworthy.
+
+### What local testing can and cannot prove
+
+Loopback runs over **ENet**, not `SteamMultiplayerPeer`. That asymmetry matters:
+
+- An arm that **crashes** locally is conclusive — you found it.
+- An arm that stays **clean** locally clears nothing. A hard native crash with
+  no Godot stack is exactly what a GDExtension fault looks like, and GodotSteam
+  is the GDExtension in play. If every arm is clean over ENet but the Steam
+  build still dies, the transport itself becomes the prime suspect.
+
+Two instances also share one GPU, and the observed crashes happened during
+combat with AI, so the load profile is not the same.
+
 ## Bisecting a crash
 
 The game can die as a hard native process termination: no Godot error, no
@@ -110,18 +174,18 @@ Rules that make the result mean something:
   later.
 
 To capture an actual stack instead of bisecting, enable Windows local crash
-dumps for the game before the next session (admin shell, and check the exe name
-first):
+dumps for the game before the next session (admin shell; the executable is
+`RTV.exe`):
 
 ```
-reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\Road to Vostok.exe" /v DumpFolder /t REG_EXPAND_SZ /d "%LOCALAPPDATA%\CrashDumps" /f /reg:64
-reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\Road to Vostok.exe" /v DumpType /t REG_DWORD /d 2 /f /reg:64
+reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\RTV.exe" /v DumpFolder /t REG_EXPAND_SZ /d "%LOCALAPPDATA%\CrashDumps" /f /reg:64
+reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\RTV.exe" /v DumpType /t REG_DWORD /d 2 /f /reg:64
 ```
 
 Or launch once with stderr redirected:
 
 ```
-"Road to Vostok.exe" --verbose > console.txt 2>&1
+RTV.exe --verbose > console.txt 2>&1
 ```
 
 ## Logs to collect
