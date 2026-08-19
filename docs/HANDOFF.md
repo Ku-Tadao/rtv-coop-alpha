@@ -9,7 +9,10 @@ so.
 
 ## 1. What exists now
 
-**Repo:** `https://github.com/Ku-Tadao/rtv-coop-alpha` — private.
+**Repo:** `https://github.com/Ku-Tadao/rtv-coop-alpha` — public, and maintained
+as a fork. Upstream (ModWorkshop 56011) was taken down; this is the only
+surviving source. `v1.0.0` on `main` is the verbatim upstream import, kept as
+the fork point.
 
 | Branch | State |
 |---|---|
@@ -427,9 +430,14 @@ Not hypothetical — each cost time or nearly shipped a wrong answer.
   `weaponPosition` should drive. A bigger win than clip remapping, but it means
   re-enabling `animator.active`, which the mod deliberately turned off and which
   interacts with `AIHooks._client_animate`. Branch it.
-- Repo is private, and the mod's authorship and licence are unresolved — the
-  README asks the original author to open an issue. Settle this before making it
-  public or promoting it.
+- **Repo is public, framed as a fork.** Upstream was pulled from ModWorkshop, so
+  this is the only source left; `v1.0.0` is the untouched import and everything
+  after it is work done here. Original authorship is still unknown and no licence
+  is asserted (none can be — the base is not ours to license), so formally it is
+  all rights reserved. The README credits the unknown original author and carries
+  a standing takedown offer if they surface. `[updates] modworkshop=56011` was
+  removed from `mod.txt` — it pointed the loader's update tab at the dead listing,
+  and at an id that could be reassigned to someone else's zip.
 - A trailer exists at `rtv-coop-video/` (Remotion, 28 s, renders to
   `out/rtv-coop-trailer.mp4`) with a **silent** audio track — no music was added,
   to avoid a copyright claim on the upload.

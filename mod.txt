@@ -4,9 +4,6 @@ id="rtv-coop-alpha"
 version="1.2.2"
 priority=10
 
-[updates]
-modworkshop=56011
-
 [autoload]
 RTVCoopAlpha="res://mods/RTVCoopAlpha/Main.gd"
 
