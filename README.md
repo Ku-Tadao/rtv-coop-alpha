@@ -10,6 +10,11 @@ player is the authority, everyone else runs a shadow of that world.
 > **Status: alpha.** It works, and it also has known bugs. See
 > [Known issues](#known-issues) before you file one.
 
+> **This is a fork.** The original mod was pulled from ModWorkshop and this repo
+> is now its only surviving source. `main` is the untouched upstream 1.0.0;
+> development continues on `dev`. See
+> [Credits, upstream, and licensing](#credits-upstream-and-licensing).
+
 ---
 
 ## Install
@@ -140,11 +145,29 @@ These are reproduced and understood, and are what the `dev` branch is for.
 reading; Godot rejects an entire script if it mixes tabs and spaces, and that
 has already shipped as a "players are invisible" bug once.
 
-## Credits and licensing
+## Credits, upstream, and licensing
 
-RTV Coop Alpha is distributed on
-[ModWorkshop](https://modworkshop.net/mod/56011). Original authorship and
-license are not recorded in the mod archive; this repository exists to version
-and build that source. **If you are the author and want this repo changed or
-taken down, open an issue.** No license is asserted here — until one is added,
-treat this as all rights reserved by the original author.
+This repository is a **fork** — a continuation of the original *RTV Coop Alpha*
+mod, which was distributed as a single `RTVCoopAlpha.vmz` on ModWorkshop
+(mod 56011) and has since been taken down. That page is gone and no other source
+survives, so this repo is now the only place the mod exists.
+
+**Lineage.** This branch (`main`, tagged `v1.0.0`) is the unmodified upstream
+1.0.0 source, imported verbatim from the shipped archive so the fork point stays
+inspectable. Continued development lives on `dev` — by 1.2.x the sync layer,
+authority model, id allocation, and puppet rig handling have all been rewritten.
+`git diff main..dev` is the extent of it.
+
+**Original authorship.** Not recorded anywhere in the mod archive — no author
+field in `mod.txt`, no license file, no headers. It is credited here as best we
+can: *original author of RTV Coop Alpha, unknown*. **If you are that author:
+open an issue.** Credit will be corrected however you want it, and if you want
+this fork taken down instead, say so and it comes down.
+
+**License.** None asserted, and none can be — you cannot license code you did
+not originally write. In the absence of a license everything here is, formally,
+all rights reserved. Treat it as source you may read, build, and play, not as
+something with granted redistribution rights.
+
+*Road to Vostok* itself is © its developer; this mod is unaffiliated fan work
+and ships no game assets.
